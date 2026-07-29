@@ -62,7 +62,11 @@ async function call(path, { method = "GET", body, auth = true } = {}) {
   const res = await fetch(`${API}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
-  if (!res.ok) throw new Error(data?.error || `Request failed (${res.status}).`);
+  if (!res.ok) {
+    const err = new Error(data?.error || `Request failed (${res.status}).`);
+    err.status = res.status;
+    throw err;
+  }
   return data;
 }
 
@@ -126,7 +130,7 @@ export const api = {
     try {
       return await call(`/public/${encodeURIComponent(id)}`, { auth: false });
     } catch (err) {
-      if (/\(404\)/.test(err.message)) return null; // mirrors local: unknown id -> null
+      if (err.status === 404) return null; // mirrors local: unknown id -> null
       throw err;
     }
   },
