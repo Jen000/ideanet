@@ -53,7 +53,8 @@ export async function refreshRanking(netId: string, counts: { likes: number; vie
     new UpdateCommand({
       TableName: TABLE,
       Key: { PK: publicPk(netId), SK: PUBLIC_SK },
-      UpdateExpression: "SET GSI1SK = :sk, score = :sc",
+      UpdateExpression: "SET GSI1SK = :sk, #score = :sc",
+      ExpressionAttributeNames: { "#score": "score" }, // defensive: alias against reserved-word collisions
       ExpressionAttributeValues: { ":sk": gsiSk(counts, netId), ":sc": score(counts) },
       ConditionExpression: "attribute_exists(PK)",
     })

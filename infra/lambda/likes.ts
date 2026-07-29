@@ -38,8 +38,9 @@ async function toggle(event: APIGatewayProxyEventV2WithJWTAuthorizer) {
       new UpdateCommand({
         TableName: TABLE,
         Key: { PK: publicPk(id), SK: PUBLIC_SK },
-        UpdateExpression: "ADD likes :d",
+        UpdateExpression: "ADD #likes :d",
         ConditionExpression: "attribute_exists(PK)",
+        ExpressionAttributeNames: { "#likes": "likes" }, // defensive: alias in case of reserved-word collisions
         ExpressionAttributeValues: { ":d": delta },
         ReturnValues: "ALL_NEW",
       })
