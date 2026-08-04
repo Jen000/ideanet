@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "../api";
-import { DEFAULT_TYPES, SWATCHES, uid } from "../constants";
+import { DEFAULT_TYPES, SWATCHES, SHAPES, uid } from "../constants";
 import { radialLayout } from "../graph";
 import { Shell, Btn, Tag, panel, inputCls, inputStyle } from "../ui";
 import Canvas from "../Canvas";
@@ -139,13 +139,22 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
                           ))}
                         </div>
                         <input type="range" min="10" max="46" value={t.size} onChange={(e) => patchType(t.id, { size: Number(e.target.value) })} className="w-full" />
+                        <div className="flex gap-1.5">
+                          {SHAPES.map((s) => (
+                            <button key={s} title={s} onClick={() => patchType(t.id, { shape: s })}
+                              className="w-6 h-6 rounded flex items-center justify-center"
+                              style={{ background: (t.shape || "circle") === s ? "rgba(0,240,255,.1)" : "transparent", outline: (t.shape || "circle") === s ? "1px solid rgba(0,240,255,.5)" : "1px solid rgba(0,240,255,.12)" }}>
+                              <ShapeIcon shape={s} color={t.color} />
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
                 ))}
               </div>
               {showTypes && (
-                <button onClick={() => { const id = uid("t"); setNet({ ...net, nodeTypes: [...net.nodeTypes, { id, name: "new type", color: SWATCHES[net.nodeTypes.length % SWATCHES.length], size: 22 }] }); }}
+                <button onClick={() => { const id = uid("t"); setNet({ ...net, nodeTypes: [...net.nodeTypes, { id, name: "new type", color: SWATCHES[net.nodeTypes.length % SWATCHES.length], size: 22, shape: "circle" }] }); }}
                   className="mt-2 text-[10px]" style={{ color: "#00f0ff" }}>+ add type</button>
               )}
             </div>
@@ -159,14 +168,16 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
               {selNode ? (
                 <>
                   <div className="text-[10px] mb-2" style={{ color: "#5f8492" }}>NODE</div>
+                  <label className="text-[9px] block mb-1" style={{ color: "#5f8492" }}>TOPIC · shown on the node</label>
                   <input value={selNode.label} onChange={(e) => patchNode({ label: e.target.value })} disabled={readOnly}
-                    className={`${inputCls} mb-2`} style={inputStyle} />
+                    placeholder="short topic" className={`${inputCls} mb-2`} style={inputStyle} />
                   <select value={selNode.typeId} onChange={(e) => patchNode({ typeId: e.target.value })} disabled={readOnly}
                     className={`${inputCls} mb-2`} style={inputStyle}>
                     {net.nodeTypes.map((t) => <option key={t.id} value={t.id} style={{ background: "#06101a" }}>{t.name}</option>)}
                   </select>
+                  <label className="text-[9px] block mb-1" style={{ color: "#5f8492" }}>STATEMENT · the full detail</label>
                   <textarea value={selNode.notes} onChange={(e) => patchNode({ notes: e.target.value })} disabled={readOnly}
-                    placeholder="notes" rows={5} className={`${inputCls} mb-2 resize-none`} style={inputStyle} />
+                    placeholder="e.g. the full problem statement" rows={5} className={`${inputCls} mb-2 resize-none`} style={inputStyle} />
                   {!readOnly && (
                     <Btn tone="danger" onClick={() => {
                       setNet((n) => ({ ...n, nodes: n.nodes.filter((x) => x.id !== selNode.id), edges: n.edges.filter((x) => x.source !== selNode.id && x.target !== selNode.id) }));
@@ -214,5 +225,23 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
         </div>
       </div>
     </Shell>
+  );
+}
+
+/* Little type-picker glyph so the shape choice is visible, not just named. */
+function ShapeIcon({ shape, color }) {
+  const s = { fill: "none", stroke: color, strokeWidth: 1.4 };
+  return (
+    <svg width="14" height="14" viewBox="-8 -8 16 16">
+      {shape === "square" ? (
+        <rect x="-5.5" y="-5.5" width="11" height="11" rx="1.5" {...s} />
+      ) : shape === "diamond" ? (
+        <polygon points="0,-6.5 6.5,0 0,6.5 -6.5,0" {...s} />
+      ) : shape === "hexagon" ? (
+        <polygon points="0,-6.5 5.6,-3.25 5.6,3.25 0,6.5 -5.6,3.25 -5.6,-3.25" {...s} />
+      ) : (
+        <circle r="6" {...s} />
+      )}
+    </svg>
   );
 }

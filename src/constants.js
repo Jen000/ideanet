@@ -1,12 +1,15 @@
 export const MONO =
   "'JetBrains Mono','Fira Code',ui-monospace,SFMono-Regular,Menlo,monospace";
 
-/** Starting palette. Users can rename, recolour, resize, and add to these. */
+/** The shapes a node type can take. Older data without a shape reads as a circle. */
+export const SHAPES = ["circle", "diamond", "hexagon", "square"];
+
+/** Starting palette. Users can rename, recolour, resize, reshape, and add to these. */
 export const DEFAULT_TYPES = [
-  { id: "t_issue", name: "issue", color: "#ff2e6d", size: 34 },
-  { id: "t_solution", name: "solution", color: "#00f0ff", size: 26 },
-  { id: "t_sub", name: "sub-solution", color: "#b967ff", size: 20 },
-  { id: "t_note", name: "note", color: "#39ff88", size: 16 },
+  { id: "t_issue", name: "issue", color: "#ff2e6d", size: 34, shape: "diamond" },
+  { id: "t_solution", name: "solution", color: "#00f0ff", size: 26, shape: "circle" },
+  { id: "t_sub", name: "sub-solution", color: "#b967ff", size: 20, shape: "hexagon" },
+  { id: "t_note", name: "note", color: "#39ff88", size: 16, shape: "square" },
 ];
 
 export const SWATCHES = [
