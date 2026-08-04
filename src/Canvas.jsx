@@ -15,6 +15,17 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
 
   const typeOf = (n) => typeById[n.typeId] || net.nodeTypes[0] || DEFAULT_TYPES[1];
 
+  // The topic sits on the shape, so a node grows just enough to hold it (its
+  // type size is the floor). Computed once per node so edges terminate on the
+  // real border, not the bare type size.
+  const radii = useMemo(() => {
+    const m = {};
+    for (const n of net.nodes) m[n.id] = nodeRadius(n.label, typeOf(n));
+    return m;
+    /* eslint-disable-next-line */
+  }, [net.nodes, net.nodeTypes]);
+  const radiusOf = (n) => radii[n.id] ?? typeOf(n).size;
+
   const toWorld = useCallback((cx, cy) => {
     const r = svgRef.current.getBoundingClientRect();
     return { x: (cx - r.left - view.x) / view.k, y: (cy - r.top - view.y) / view.k };
@@ -81,7 +92,7 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
   }, []);
 
   const nodeAt = (wx, wy) =>
-    net.nodes.filter((n) => !hidden.has(n.id)).find((n) => Math.hypot(n.x - wx, n.y - wy) <= typeOf(n).size + 6);
+    net.nodes.filter((n) => !hidden.has(n.id)).find((n) => Math.hypot(n.x - wx, n.y - wy) <= radiusOf(n) + 6);
 
   const onPointerDown = (ev) => {
     if (ev.button !== 0) return;
@@ -182,7 +193,7 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
             const on = lit ? lit.has(a.id) && lit.has(b.id) : false;
             const sel = selected?.kind === "edge" && selected.id === e.id;
             const ang = Math.atan2(b.y - a.y, b.x - a.x);
-            const ra = typeOf(a).size + 4, rb = typeOf(b).size + 10;
+            const ra = radiusOf(a) + 4, rb = radiusOf(b) + 10;
             const x1 = a.x + Math.cos(ang) * ra, y1 = a.y + Math.sin(ang) * ra;
             const x2 = b.x - Math.cos(ang) * rb, y2 = b.y - Math.sin(ang) * rb;
             const bright = on || sel;
@@ -217,25 +228,38 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
             if (hidden.has(n.id)) return null;
             const t = typeOf(n);
             const isSel = focus === n.id;
-            const r = t.size * (isSel ? 1.16 : 1);
+            const r = radiusOf(n);
             const kidCount = (children[n.id] || []).filter((c) => byId[c]).length;
+            const fs = 10;
+            const lh = fs * 1.18;
+            const lines = wrapLabel(n.label, lineChars(t.size), 2);
+            const y0 = -((lines.length - 1) / 2) * lh;
             return (
               <g key={n.id} transform={`translate(${n.x},${n.y})`}
                 style={{ opacity: dim(n.id), transition: "opacity 340ms ease", cursor: "pointer" }}
                 onPointerDown={(ev) => startNodeDrag(ev, n)}
                 onPointerEnter={() => setHover(n.id)}
                 onPointerLeave={() => setHover((h) => (h === n.id ? null : h))}>
-                <circle r={r} fill="rgba(6,12,18,0.82)" stroke={t.color} strokeWidth={isSel ? 2.6 : 2}
+                <ShapeBody shape={t.shape} r={r} fill="rgba(6,12,18,0.88)" stroke={t.color} strokeWidth={isSel ? 2.6 : 2}
                   style={{
                     filter: `drop-shadow(0 0 ${isSel ? 14 : 7}px ${t.color})`,
-                    transition: "r 300ms cubic-bezier(.2,.8,.2,1), stroke-width 300ms ease, filter 300ms ease",
+                    transition: "stroke-width 300ms ease, filter 300ms ease",
                     animation: isSel ? "np 1.7s ease-in-out infinite" : "none",
                   }} />
-                <text y={r + 15} textAnchor="middle"
-                  style={{ fontFamily: MONO, fontSize: isSel ? 11.5 : 10, fill: isSel ? "#eafeff" : "#a7ccd6", pointerEvents: "none", textShadow: isSel ? `0 0 8px ${t.color}` : "none", transition: "font-size 280ms ease" }}>
-                  {n.label.length > 22 ? n.label.slice(0, 21) + "…" : n.label}
+                <text textAnchor="middle" dominantBaseline="middle"
+                  style={{ fontFamily: MONO, fontSize: fs, fontWeight: isSel ? 600 : 500, fill: isSel ? "#eafeff" : "#d3edf4", pointerEvents: "none", textShadow: isSel ? `0 0 8px ${t.color}` : `0 1px 3px rgba(0,0,0,.85)` }}>
+                  {lines.map((ln, i) => (
+                    <tspan key={i} x="0" y={y0 + i * lh}>{ln}</tspan>
+                  ))}
                 </text>
-                {n.notes && <circle cx={r * 0.72} cy={-r * 0.72} r="3" fill={t.color} opacity="0.9" />}
+                {n.notes && (
+                  <g transform={`translate(${r * 0.72},${-r * 0.72})`} style={{ pointerEvents: "none" }}>
+                    <circle r="6" fill="rgba(6,12,18,.96)" stroke={t.color} strokeWidth="1.1" />
+                    <line x1="-2.6" y1="-1.4" x2="2.6" y2="-1.4" stroke={t.color} strokeWidth="1" strokeLinecap="round" />
+                    <line x1="-2.6" y1="0.3" x2="2.6" y2="0.3" stroke={t.color} strokeWidth="1" strokeLinecap="round" />
+                    <line x1="-2.6" y1="2" x2="1" y2="2" stroke={t.color} strokeWidth="1" strokeLinecap="round" />
+                  </g>
+                )}
                 {kidCount > 0 && (
                   <g transform={`translate(0,${r + 22})`} onPointerDown={(ev) => { ev.stopPropagation(); onChange({ ...net, nodes: net.nodes.map((m) => (m.id === n.id ? { ...m, collapsed: !m.collapsed } : m)) }); }}>
                     <circle r="7.5" fill="rgba(6,12,18,.95)" stroke={t.color} strokeWidth="1.2" opacity="0.85" />
@@ -262,6 +286,86 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
       </div>
     </div>
   );
+}
+
+/* --------------------------------------------------------------- node shapes
+   All shapes are drawn to fit inside a bounding radius r, so edge geometry and
+   hit-testing can treat every node as a circle of that radius. Unknown/missing
+   shapes fall back to a circle (older data). */
+function ShapeBody({ shape, r, fill, stroke, strokeWidth, style }) {
+  const p = { fill, stroke, strokeWidth, style };
+  if (shape === "square") {
+    const s = r * 0.9;
+    return <rect x={-s} y={-s} width={2 * s} height={2 * s} rx={Math.max(2, s * 0.18)} {...p} />;
+  }
+  if (shape === "diamond") {
+    const d = r * 1.15;
+    return <polygon points={`0,${-d} ${d},0 0,${d} ${-d},0`} {...p} />;
+  }
+  if (shape === "hexagon") {
+    return <polygon points={polyPoints(6, r * 1.06)} {...p} />;
+  }
+  // circle keeps the eased radius transition it always had
+  return (
+    <circle r={r} fill={fill} stroke={stroke} strokeWidth={strokeWidth}
+      style={{ ...style, transition: `r 300ms cubic-bezier(.2,.8,.2,1), ${style?.transition || ""}` }} />
+  );
+}
+
+function polyPoints(sides, R) {
+  const pts = [];
+  for (let i = 0; i < sides; i++) {
+    const a = (Math.PI / 180) * ((360 / sides) * i - 90);
+    pts.push(`${(R * Math.cos(a)).toFixed(1)},${(R * Math.sin(a)).toFixed(1)}`);
+  }
+  return pts.join(" ");
+}
+
+/* ---------------------------------------------------------------- label wrap
+   The topic renders on the shape. We wrap to at most `maxLines`, prefer wrapping
+   over widening, and ellipsize anything that still doesn't fit — the full text
+   lives in the node's notes/statement in the side panel. */
+const lineChars = (size) => clamp(Math.round(size / 3.4) + 4, 7, 15);
+
+function wrapLabel(text, maxChars, maxLines) {
+  const t = (text || "").trim();
+  if (!t) return [""];
+  const words = t.split(/\s+/);
+  const lines = [];
+  let cur = "";
+  const flush = () => { if (cur !== "") { lines.push(cur); cur = ""; } };
+  for (let w of words) {
+    // hard-break a single word longer than a line
+    while (w.length > maxChars) {
+      flush();
+      if (lines.length >= maxLines) break;
+      lines.push(w.slice(0, maxChars));
+      w = w.slice(maxChars);
+    }
+    if (lines.length >= maxLines) { cur = ""; break; }
+    if (!cur) cur = w;
+    else if ((cur + " " + w).length <= maxChars) cur += " " + w;
+    else { flush(); if (lines.length >= maxLines) break; cur = w; }
+  }
+  flush();
+  const out = lines.slice(0, maxLines);
+
+  // ellipsize the last visible line if anything was dropped
+  const kept = out.join(" ").replace(/\s+/g, "").length;
+  if (kept < t.replace(/\s+/g, "").length && out.length) {
+    const last = out[out.length - 1];
+    out[out.length - 1] = (last.length > maxChars - 1 ? last.slice(0, maxChars - 1) : last).replace(/\s+$/, "") + "…";
+  }
+  return out.length ? out : [""];
+}
+
+// Bounding radius that fits the topic, with the type size as the floor.
+function nodeRadius(label, t) {
+  const fs = 10;
+  const lines = wrapLabel(label, lineChars(t.size), 2);
+  const longest = Math.max(1, ...lines.map((l) => l.length));
+  const textR = Math.max(longest * fs * 0.31, (lines.length * fs * 1.18) / 2) + 10;
+  return Math.max(t.size, textR);
 }
 
 const CanvasBtn = ({ children, onClick }) => (
