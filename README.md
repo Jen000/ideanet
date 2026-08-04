@@ -13,6 +13,20 @@ npm install
 npm run dev
 ```
 
+## Deploy (GitHub Pages)
+
+Pushing to `main` builds the app and publishes it via
+`.github/workflows/deploy-pages.yml`. One-time setup: **Settings → Pages →
+Build and deployment → Source: GitHub Actions**. The site then serves at
+`https://<owner>.github.io/ideanet/`.
+
+Because it's a project site under `/ideanet/`, the production build sets Vite's
+`base` accordingly (see `vite.config.js`); override with `VITE_BASE` if the repo
+is renamed or served from a custom domain. The deployed site uses the default
+localStorage adapter — to point Pages at the AWS backend, flip the export in
+`src/api/index.js` to `./aws` and set the four `VITE_*` values as repository
+**Variables** (used by the workflow's build step).
+
 ## How it's put together
 
 ```
