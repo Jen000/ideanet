@@ -6,5 +6,7 @@ import react from "@vitejs/plugin-react";
 // VITE_BASE if the repo is renamed or served from a custom domain / root.
 export default defineConfig(({ command }) => ({
   base: command === "build" ? process.env.VITE_BASE ?? "/ideanet/" : "/",
+  // amazon-cognito-identity-js references Node's `global`, absent in browsers.
+  define: { global: "globalThis" },
   plugins: [react()],
 }));

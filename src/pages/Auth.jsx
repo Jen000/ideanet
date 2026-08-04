@@ -47,7 +47,7 @@ export default function Auth({ onDone, onBack }) {
             <button onClick={onBack} className="text-[10px]" style={{ color: "#4f7280" }}>← back to home</button>
           </div>
           <p className="mt-3 text-[9px] leading-relaxed" style={{ color: "#3f5f6c" }}>
-            Demo accounts are stored on this device only. Real sign-in arrives when this is wired to Cognito.
+            Your account and networks are stored securely in the cloud. Use an email and a password of at least 8 characters.
           </p>
         </div>
       </div>

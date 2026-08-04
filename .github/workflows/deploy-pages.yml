@@ -29,16 +29,9 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # AWS adapter config comes from the committed .env.production (public
+      # client identifiers). Vite loads it automatically for a production build.
       - run: npm run build
-        env:
-          # Only used if src/api/index.js is flipped to the ./aws adapter.
-          # Set these as repository Variables (Settings > Secrets and variables
-          # > Actions > Variables) from the CDK deploy outputs. Harmless when
-          # empty — the default localStorage adapter ignores them.
-          VITE_AWS_REGION: ${{ vars.VITE_AWS_REGION }}
-          VITE_COGNITO_USER_POOL_ID: ${{ vars.VITE_COGNITO_USER_POOL_ID }}
-          VITE_COGNITO_CLIENT_ID: ${{ vars.VITE_COGNITO_CLIENT_ID }}
-          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
