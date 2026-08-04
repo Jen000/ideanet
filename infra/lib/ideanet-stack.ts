@@ -14,9 +14,20 @@ import { HttpJwtAuthorizer } from "aws-cdk-lib/aws-apigatewayv2-authorizers";
 import { HttpLambdaIntegration } from "aws-cdk-lib/aws-apigatewayv2-integrations";
 import * as path from "path";
 
+export interface IdeaNetStackProps extends cdk.StackProps {
+  /** "dev" or "prod" — controls resource retention and naming. */
+  envName: string;
+}
+
 export class IdeaNetStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: IdeaNetStackProps) {
     super(scope, id, props);
+
+    const isProd = props.envName === "prod";
+    // Prod keeps its data if the stack is ever deleted; dev is disposable.
+    const removalPolicy = isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY;
+    cdk.Tags.of(this).add("app", "ideanet");
+    cdk.Tags.of(this).add("env", props.envName);
 
     /* ------------------------------------------------------------------ data
        Single table. Item layout (see lambda/shared/keys.ts for the map):
@@ -30,7 +41,8 @@ export class IdeaNetStack extends cdk.Stack {
       partitionKey: { name: "PK", type: dynamodb.AttributeType.STRING },
       sortKey: { name: "SK", type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // demo project — no data to keep
+      removalPolicy, // prod: RETAIN, dev: DESTROY
+      pointInTimeRecovery: isProd,
     });
     table.addGlobalSecondaryIndex({
       indexName: "GSI1",
@@ -68,7 +80,7 @@ export class IdeaNetStack extends cdk.Stack {
       },
       lambdaTriggers: { preSignUp },
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy, // prod: RETAIN so accounts survive a stack teardown
     });
 
     // Public SPA client: no secret, SRP auth (what amazon-cognito-identity-js uses).
@@ -180,8 +192,8 @@ export class IdeaNetStack extends cdk.Stack {
     const siteBucket = new s3.Bucket(this, "SiteBucket", {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
+      removalPolicy,
+      autoDeleteObjects: !isProd, // only dev is torn down; prod is retained
     });
     const distribution = new cloudfront.Distribution(this, "SiteDistribution", {
       defaultRootObject: "index.html",
@@ -198,6 +210,7 @@ export class IdeaNetStack extends cdk.Stack {
     /* ---------------------------------------------------------------- output
        These four map straight onto the frontend's VITE_* env vars.
     ------------------------------------------------------------------------ */
+    new cdk.CfnOutput(this, "Environment", { value: props.envName });
     new cdk.CfnOutput(this, "Region", { value: this.region });
     new cdk.CfnOutput(this, "UserPoolId", { value: userPool.userPoolId });
     new cdk.CfnOutput(this, "UserPoolClientId", { value: userPoolClient.userPoolClientId });

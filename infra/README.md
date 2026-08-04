@@ -11,17 +11,35 @@ site (wired up, not yet deployed to).
 - `npm i -g aws-cdk` (or use the local `npx cdk`)
 - Region: **us-east-1**
 
+## Environments (dev / prod)
+
+`dev` and `prod` are **fully separate stacks** — separate Cognito pool, DynamoDB
+table, API, queues, everything — so work in dev can never touch prod data. Pick
+one with `-c env=dev|prod` (there are npm scripts for both):
+
+| Env    | Stack name         | Data on stack delete | Frontend env file   |
+| ------ | ------------------ | -------------------- | ------------------- |
+| `prod` | `IdeaNetStack`     | **retained**         | `.env.production`   |
+| `dev`  | `IdeaNetStack-dev` | destroyed            | `.env.development`  |
+
+`npm run dev` (Vite development mode) reads `.env.development` → talks to the dev
+backend; `npm run build` (production) reads `.env.production` → the prod backend.
+So local development never points at prod.
+
 ## Deploy
 
 ```bash
 cd infra
 npm install
-npx cdk bootstrap            # first time only, per account/region
-npx cdk deploy --profile default
+npx cdk bootstrap                 # first time only, per account/region
+
+npm run deploy:dev                # or: npx cdk deploy -c env=dev
+npm run deploy:prod               # or: npx cdk deploy -c env=prod
 ```
 
-`cdk deploy` prints the four values the frontend needs. Copy them into the app's
-`.env` (see `../.env.example`):
+Deploying prints the outputs the frontend needs. For **dev**, copy them into
+`../.env.development` (see `../.env.development.example`); for **prod**, into
+`../.env.production`:
 
 | CDK output          | Frontend env var               |
 | ------------------- | ------------------------------ |
@@ -33,8 +51,10 @@ npx cdk deploy --profile default
 `SiteBucketName` and `SiteUrl` are the (empty) hosting target — see "Frontend
 hosting" below.
 
-To tear it all down: `npx cdk destroy --profile default`. The table, bucket and
-user pool are `RemovalPolicy.DESTROY` (this is a demo project — no data to keep).
+To tear down **dev**: `npm run destroy:dev`. Its table, bucket and user pool are
+`DESTROY`, so they go with it. **Prod** retains its table, bucket and user pool
+(`RETAIN`) and has point-in-time recovery on the table, so a stack teardown never
+takes the data with it — delete those resources by hand if you really mean to.
 
 ## What gets created
 
