@@ -5,10 +5,13 @@
   "bin": { "ideanet-infra": "bin/ideanet.js" },
   "scripts": {
     "build": "tsc",
-    "synth": "cdk synth",
-    "deploy": "cdk deploy",
-    "diff": "cdk diff",
-    "destroy": "cdk destroy"
+    "synth:dev": "cdk synth -c env=dev",
+    "synth:prod": "cdk synth -c env=prod",
+    "deploy:dev": "cdk deploy -c env=dev",
+    "deploy:prod": "cdk deploy -c env=prod",
+    "diff:dev": "cdk diff -c env=dev",
+    "diff:prod": "cdk diff -c env=prod",
+    "destroy:dev": "cdk destroy -c env=dev"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.145",

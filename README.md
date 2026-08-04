@@ -60,18 +60,19 @@ export { api, summarize, score } from "./local"; // localStorage, offline dev
 - **`local`** (default) — accounts and networks in `localStorage`, no setup.
   This is the offline dev path; it stays working and intact.
 - **`aws`** — real auth (Cognito) and storage (DynamoDB behind our own HTTP
-  API). Provision it once with the CDK stack in [`infra/`](./infra/README.md),
-  then copy the deploy outputs into `.env`:
+  API); this is what the hosted app runs on. Provisioned by the CDK stack in
+  [`infra/`](./infra/README.md), which has **two separate environments**:
 
-  ```bash
-  cp .env.example .env      # fill VITE_* from `cd infra && npx cdk deploy`
-  # flip the export in src/api/index.js to ./aws, then:
-  npm run dev
-  ```
+  | Command | Vite mode | Env file | Backend |
+  | --- | --- | --- | --- |
+  | `npm run dev` | development | `.env.development` | **dev** stack |
+  | `npm run build` | production | `.env.production` | **prod** stack |
 
-  `.env` is gitignored — never commit real values. See `.env.example` for the
-  four variables (`VITE_AWS_REGION`, `VITE_COGNITO_USER_POOL_ID`,
-  `VITE_COGNITO_CLIENT_ID`, `VITE_API_BASE_URL`).
+  So local development points at the dev backend and never touches prod. Deploy
+  each with `cd infra && npm run deploy:dev` / `deploy:prod`, then fill the four
+  `VITE_*` values (region, Cognito pool + client, API URL) into the matching env
+  file — see `.env.development.example` and `infra/README.md`. These are public
+  client ids, safe to commit; personal overrides go in the gitignored `.env.local`.
 
   Two behaviours differ from the demo store, by design:
   - **Likes are sign-in-gated.** On AWS a like belongs to a user, not a device,
