@@ -216,7 +216,7 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
                       : "Only you can see this network."}
                   </p>
                   <p className="text-[9px] leading-relaxed mt-3 pt-3" style={{ color: "#3f5f6c", borderTop: "1px solid rgba(0,240,255,.1)" }}>
-                    Double-click empty canvas to add a node. Drag the cyan dot on a node to connect it to another. Select a node and press Delete to remove it.
+                    Double-click empty canvas to add a node. Drag the ⊕ handle on a node to another to link them — or to empty space to drop a new connected node. Select a node and press Delete to remove it.
                   </p>
                 </>
               )}

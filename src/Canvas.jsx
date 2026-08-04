@@ -140,9 +140,24 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
     if (d.mode === "connect") {
       const w = toWorld(ev.clientX, ev.clientY);
       const target = nodeAt(w.x, w.y);
+      const src = byId[d.from];
       setLive(null);
-      if (target && target.id !== d.from && !net.edges.some((e) => e.source === d.from && e.target === target.id)) {
-        onChange({ ...net, edges: [...net.edges, { id: uid("e"), source: d.from, target: target.id, label: "", directed: true }] });
+      if (target) {
+        // dropped on a node → link the two (unless it'd duplicate an edge)
+        if (target.id !== d.from && !net.edges.some((e) => e.source === d.from && e.target === target.id)) {
+          onChange({ ...net, edges: [...net.edges, { id: uid("e"), source: d.from, target: target.id, label: "", directed: true }] });
+        }
+      } else if (src && Math.hypot(w.x - src.x, w.y - src.y) > radiusOf(src) + 24) {
+        // dropped on empty canvas (and dragged a real distance) → create a new
+        // node there, already connected from the source
+        const id = uid();
+        const typeId = activeTypeId && typeById[activeTypeId] ? activeTypeId : src.typeId || net.nodeTypes[0].id;
+        onChange({
+          ...net,
+          nodes: [...net.nodes, { id, label: "New node", typeId, notes: "", x: Math.round(w.x), y: Math.round(w.y), collapsed: false }],
+          edges: [...net.edges, { id: uid("e"), source: d.from, target: id, label: "", directed: true }],
+        });
+        setSelected({ kind: "node", id });
       }
       return;
     }
@@ -269,9 +284,13 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
                   </g>
                 )}
                 {!readOnly && (hover === n.id || isSel) && (
-                  <circle cx={r + 9} cy={0} r="5.5" fill="#050a0e" stroke="#00f0ff" strokeWidth="1.4"
-                    style={{ cursor: "crosshair", filter: "drop-shadow(0 0 5px #00f0ff)" }}
-                    onPointerDown={(ev) => startConnect(ev, n)} />
+                  <g transform={`translate(${r + 11},0)`} style={{ cursor: "crosshair" }}
+                    onPointerDown={(ev) => startConnect(ev, n)}>
+                    <title>Drag to a node to link them, or to empty space to add a connected node</title>
+                    <circle r="7" fill="#050a0e" stroke="#00f0ff" strokeWidth="1.4" style={{ filter: "drop-shadow(0 0 5px #00f0ff)" }} />
+                    <line x1="-3.2" y1="0" x2="3.2" y2="0" stroke="#00f0ff" strokeWidth="1.3" strokeLinecap="round" style={{ pointerEvents: "none" }} />
+                    <line x1="0" y1="-3.2" x2="0" y2="3.2" stroke="#00f0ff" strokeWidth="1.3" strokeLinecap="round" style={{ pointerEvents: "none" }} />
+                  </g>
                 )}
               </g>
             );

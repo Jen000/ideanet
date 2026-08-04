@@ -46,7 +46,7 @@ export default function Dashboard({ user, onOpen, onHome, onSignOut }) {
         {nets.length === 0 ? (
           <div className="p-10 rounded text-center" style={panel}>
             <div className="text-xs mb-2" style={{ color: "#9ef0ff" }}>Start with one idea.</div>
-            <p className="text-[11px] mb-5" style={{ color: "#6f94a1" }}>A new network opens with a single node. Double-click the canvas to add more, drag between them to connect.</p>
+            <p className="text-[11px] mb-5" style={{ color: "#6f94a1" }}>A new network opens with a single node. Double-click the canvas to add more, or drag a node's ⊕ handle to empty space to grow a connected branch.</p>
             <Btn tone="primary" onClick={create}>+ new network</Btn>
           </div>
         ) : (
