@@ -5,5 +5,5 @@
  * store for AWS is a one-line change in this file. Both adapters must export
  * the same surface — see the contract in ./aws.js.
  */
-export { api, summarize, score } from "./local";
-// export { api, summarize, score } from "./aws";
+// export { api, summarize, score } from "./local";
+export { api, summarize, score } from "./aws";
