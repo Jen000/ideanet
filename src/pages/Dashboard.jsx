@@ -9,12 +9,25 @@ export default function Dashboard({ user, onOpen, onOpenPublic, onHome, onSignOu
   const [tab, setTab] = useState("created");
   const [nets, setNets] = useState([]);
   const [stars, setStars] = useState([]);
+  const [starIds, setStarIds] = useState([]);
   const [loaded, setLoaded] = useState(false);
 
   const refresh = () => api.myNetworks().then(setNets);
   useEffect(() => {
-    Promise.all([api.myNetworks().then(setNets), api.starred().then(setStars)]).finally(() => setLoaded(true));
+    Promise.all([
+      api.myNetworks().then(setNets),
+      api.starred().then(setStars),
+      api.starredIds().then(setStarIds),
+    ]).finally(() => setLoaded(true));
   }, []);
+
+  const toggleStar = async (id) => {
+    const r = await api.toggleStar(id);
+    setStarIds((s) => (r.starred ? [...s, id] : s.filter((x) => x !== id)));
+    api.starred().then(setStars); // keep the Starred tab in sync
+  };
+  // A bookmarked network you own opens in the editor; anyone else's opens read-only.
+  const openStar = (id) => (nets.some((n) => n.id === id) ? onOpen(id) : onOpenPublic(id));
 
   const create = async () => {
     const net = {
@@ -73,9 +86,14 @@ export default function Dashboard({ user, onOpen, onOpenPublic, onHome, onSignOu
                       <span style={{ color: n.visibility === "public" ? "#39ff88" : "#5c7f8c" }}>{n.visibility}</span>
                       <span>· {n.nodes.length} nodes</span>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 items-center">
                       <Btn onClick={() => onOpen(n.id)}>open</Btn>
                       <Btn tone="danger" onClick={() => remove(n.id)}>delete</Btn>
+                      <button onClick={() => toggleStar(n.id)} className="ml-auto text-sm leading-none"
+                        title={starIds.includes(n.id) ? "Remove from Starred" : "Save to Starred"}
+                        style={{ color: starIds.includes(n.id) ? "#ffd166" : "#4f7280" }}>
+                        {starIds.includes(n.id) ? "★" : "☆"}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -83,11 +101,11 @@ export default function Dashboard({ user, onOpen, onOpenPublic, onHome, onSignOu
             </div>
           )
         ) : stars.length === 0 ? (
-          <Empty title="Nothing starred yet." body="Open a public network and tap ♥ to keep it here. Starred networks are the ones you've liked in the gallery." />
+          <Empty title="Nothing saved yet." body="Open any network and tap ☆ save to keep it here for later. Starred is your private reading list — separate from the ♥ likes you leave in the gallery." />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {stars.map((s) => (
-              <button key={s.id} onClick={() => onOpenPublic(s.id)} className="text-left rounded overflow-hidden transition-transform hover:-translate-y-0.5" style={panel}>
+              <button key={s.id} onClick={() => openStar(s.id)} className="text-left rounded overflow-hidden transition-transform hover:-translate-y-0.5" style={panel}>
                 <div style={{ borderBottom: "1px solid rgba(0,240,255,.1)", background: "rgba(0,0,0,.35)" }}>
                   <MiniPreview preview={s.preview} />
                 </div>

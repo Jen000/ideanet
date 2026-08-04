@@ -63,6 +63,8 @@ user pool are `RemovalPolicy.DESTROY` (this is a demo project — no data to kee
   | POST   | `/networks/{id}/unpublish`    | JWT  | `networks.ts`    |
   | POST   | `/networks/{id}/like`         | JWT  | `likes.ts`       |
   | GET    | `/likes`                      | JWT  | `likes.ts`       |
+  | POST   | `/networks/{id}/star`         | JWT  | `likes.ts`       |
+  | GET    | `/stars`                      | JWT  | `likes.ts`       |
   | GET    | `/starred`                    | JWT  | `likes.ts`       |
   | GET    | `/gallery`                    | open | `gallery.ts`     |
   | GET    | `/public/{id}`                | open | `gallery.ts`     |

@@ -6,7 +6,7 @@ import { Shell, Btn, Tag, panel, inputCls, inputStyle } from "../ui";
 import Canvas from "../Canvas";
 
 /* ================================================================== EDITOR */
-export default function Editor({ netId, user, onExit, readOnly, publicNet, onLike, liked }) {
+export default function Editor({ netId, user, onExit, readOnly, publicNet, onLike, liked, onStar, starred }) {
   const [net, setNet] = useState(publicNet || null);
   const [selected, setSelected] = useState(null);
   const [q, setQ] = useState("");
@@ -80,7 +80,10 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
           )}
           <div className="flex-1" />
           {readOnly ? (
-            <Btn tone={liked ? "primary" : "ghost"} onClick={onLike}>♥ {net.likes || 0}</Btn>
+            <div className="flex items-center gap-2">
+              {onStar && <Btn tone={starred ? "primary" : "ghost"} onClick={onStar}>{starred ? "★ saved" : "☆ save"}</Btn>}
+              <Btn tone={liked ? "primary" : "ghost"} onClick={onLike}>♥ {net.likes || 0}</Btn>
+            </div>
           ) : (
             <>
               <span className="text-[10px] hidden sm:inline" style={{ color: saved === "saved" ? "#39ff88" : "#ffd166" }}>{saved}</span>
