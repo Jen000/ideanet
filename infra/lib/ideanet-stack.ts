@@ -164,6 +164,9 @@ export class IdeaNetStack extends cdk.Stack {
     api.addRoutes({ path: "/networks/{id}/unpublish", methods: [apigw.HttpMethod.POST], integration: networksInt, authorizer });
     api.addRoutes({ path: "/networks/{id}/like", methods: [apigw.HttpMethod.POST], integration: likesInt, authorizer });
     api.addRoutes({ path: "/likes", methods: [apigw.HttpMethod.GET], integration: likesInt, authorizer });
+    api.addRoutes({ path: "/networks/{id}/star", methods: [apigw.HttpMethod.POST], integration: likesInt, authorizer });
+    api.addRoutes({ path: "/stars", methods: [apigw.HttpMethod.GET], integration: likesInt, authorizer });
+    api.addRoutes({ path: "/starred", methods: [apigw.HttpMethod.GET], integration: likesInt, authorizer });
 
     // Open (no authorizer) — public gallery must read without an account.
     api.addRoutes({ path: "/gallery", methods: [apigw.HttpMethod.GET], integration: galleryInt });

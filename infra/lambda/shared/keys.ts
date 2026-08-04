@@ -3,6 +3,7 @@
 export const userPk = (userId: string) => `USER#${userId}`;
 export const netSk = (netId: string) => `NET#${netId}`;
 export const likeSk = (netId: string) => `LIKE#${netId}`;
+export const starSk = (netId: string) => `STAR#${netId}`; // private bookmark, distinct from a public like
 
 export const publicPk = (netId: string) => `PUBLIC#${netId}`;
 export const PUBLIC_SK = "NET";

@@ -153,6 +153,23 @@ export const api = {
     if (!jwt) return [];
     return call("/likes");
   },
+  // Stars are private bookmarks — "save to come back to" — separate from likes.
+  async toggleStar(id) {
+    const jwt = await idToken();
+    if (!jwt) throw new Error("Sign in to save networks.");
+    return call(`/networks/${encodeURIComponent(id)}/star`, { method: "POST" });
+  },
+  async starredIds() {
+    const jwt = await idToken();
+    if (!jwt) return [];
+    return call("/stars");
+  },
+  async starred() {
+    // Card summaries for the caller's bookmarks. Signed-in only.
+    const jwt = await idToken();
+    if (!jwt) return [];
+    return call("/starred");
+  },
 
   // Seeding is demo-only in the local adapter; on AWS it's a no-op.
   async ensureSeed() {},

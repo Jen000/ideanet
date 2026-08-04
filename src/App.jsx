@@ -11,10 +11,12 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [publicNet, setPublicNet] = useState(null);
   const [liked, setLiked] = useState([]);
+  const [starred, setStarred] = useState([]);
 
   useEffect(() => {
     api.currentUser().then(setUser);
     api.likedIds().then(setLiked);
+    api.starredIds().then(setStarred);
     api.ensureSeed();
   }, []);
 
@@ -31,12 +33,18 @@ export default function App() {
     setPublicNet((n) => ({ ...n, likes: r.likes }));
   };
 
+  const star = async () => {
+    const r = await api.toggleStar(publicNet.id);
+    setStarred((s) => (r.starred ? [...s, publicNet.id] : s.filter((x) => x !== publicNet.id)));
+  };
+
   if (route.name === "auth")
     return <Auth onBack={() => setRoute({ name: "landing" })} onDone={(u) => { setUser(u); setRoute({ name: "dashboard" }); }} />;
 
   if (route.name === "dashboard" && user)
     return <Dashboard user={user} onHome={() => setRoute({ name: "landing" })}
       onOpen={(id) => setRoute({ name: "editor", id })}
+      onOpenPublic={openPublic}
       onSignOut={async () => { await api.signOut(); setUser(null); setRoute({ name: "landing" }); }} />;
 
   if (route.name === "editor" && user)
@@ -45,6 +53,7 @@ export default function App() {
   if (route.name === "viewer" && publicNet)
     return <Editor netId={publicNet.id} readOnly publicNet={publicNet}
       liked={liked.includes(publicNet.id)} onLike={like}
+      starred={starred.includes(publicNet.id)} onStar={user ? star : null}
       onExit={() => { setPublicNet(null); setRoute({ name: "landing" }); }} />;
 
   return <Landing user={user} onSignIn={() => setRoute({ name: "auth" })}

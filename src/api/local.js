@@ -194,6 +194,26 @@ export const api = {
   async likedIds() {
     return (await store.get("liked")) || [];
   },
+
+  // Stars are private bookmarks — "save to come back to" — separate from likes.
+  async toggleStar(id) {
+    const list = (await store.get("starred")) || [];
+    const on = list.includes(id);
+    const next = on ? list.filter((x) => x !== id) : [...list, id];
+    await store.set("starred", next);
+    return { starred: !on };
+  },
+  async starredIds() {
+    return (await store.get("starred")) || [];
+  },
+  async starred() {
+    const ids = (await store.get("starred")) || [];
+    const idx = (await store.get("pubindex", true)) || {};
+    const mine = (await store.get("mynets")) || {};
+    // Resolve each bookmark to a public summary, or the caller's own network.
+    // Newest bookmark first; ids that resolve to neither drop out.
+    return [...ids].reverse().map((id) => idx[id] || (mine[id] && summarize(mine[id]))).filter(Boolean);
+  },
 };
 
 const publicUser = (u) => ({ id: u.id, name: u.name, email: u.email });
