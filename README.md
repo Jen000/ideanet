@@ -27,11 +27,45 @@ src/
   api/
     index.js         the only import path for persistence
     local.js         working localStorage adapter
-    aws.js           contract for the real backend — signatures, no bodies
+    aws.js           AWS adapter — Cognito + our HTTP API
 ```
 
 **Everything talks to `api/` and nothing else.** Swapping the demo store for
 AWS is a one-line change in `api/index.js`.
+
+## Persistence adapters
+
+Two interchangeable backends behind the same surface. Pick one by flipping the
+single export in `src/api/index.js`:
+
+```js
+export { api, summarize, score } from "./local"; // localStorage, offline dev
+// export { api, summarize, score } from "./aws"; // Cognito + DynamoDB
+```
+
+- **`local`** (default) — accounts and networks in `localStorage`, no setup.
+  This is the offline dev path; it stays working and intact.
+- **`aws`** — real auth (Cognito) and storage (DynamoDB behind our own HTTP
+  API). Provision it once with the CDK stack in [`infra/`](./infra/README.md),
+  then copy the deploy outputs into `.env`:
+
+  ```bash
+  cp .env.example .env      # fill VITE_* from `cd infra && npx cdk deploy`
+  # flip the export in src/api/index.js to ./aws, then:
+  npm run dev
+  ```
+
+  `.env` is gitignored — never commit real values. See `.env.example` for the
+  four variables (`VITE_AWS_REGION`, `VITE_COGNITO_USER_POOL_ID`,
+  `VITE_COGNITO_CLIENT_ID`, `VITE_API_BASE_URL`).
+
+  Two behaviours differ from the demo store, by design:
+  - **Likes are sign-in-gated.** On AWS a like belongs to a user, not a device,
+    so a signed-out visitor's like is a no-op; they can still open and read any
+    public network.
+  - **View counts are eventually consistent.** Opening a public network is a
+    pure read; the view is counted asynchronously (buffered through SQS and
+    rolled up), so the number can lag an open by a few seconds.
 
 ## Canvas
 
@@ -73,10 +107,11 @@ Public networks are readable without an account. Ranking is
 
 ## Not done yet
 
-- Real auth. `api/local.js` stores accounts in `localStorage` in plain text.
-  It is a stand-in for Cognito and is not security.
-- The AWS adapter (`api/aws.js` is signatures only).
-- View counting at scale — writing a counter on every read will contend once
-  something gets popular. Decide on buffering before launch.
+- Frontend deployment. The CDK stack provisions S3 + CloudFront hosting but
+  nothing is deployed to it yet — see [`infra/README.md`](./infra/README.md).
+- Email verification. The Cognito pool auto-confirms new accounts (a pre-signup
+  trigger) so signup matches the local flow; real verification isn't wired up.
+- `api/local.js` still stores accounts in `localStorage` in plain text. It's the
+  offline demo store, not security — use the `aws` adapter for real auth.
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for branch and PR naming.
