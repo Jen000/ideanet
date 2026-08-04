@@ -37,6 +37,7 @@ export default function App() {
   if (route.name === "dashboard" && user)
     return <Dashboard user={user} onHome={() => setRoute({ name: "landing" })}
       onOpen={(id) => setRoute({ name: "editor", id })}
+      onOpenPublic={openPublic}
       onSignOut={async () => { await api.signOut(); setUser(null); setRoute({ name: "landing" }); }} />;
 
   if (route.name === "editor" && user)

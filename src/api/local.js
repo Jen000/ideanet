@@ -194,6 +194,12 @@ export const api = {
   async likedIds() {
     return (await store.get("liked")) || [];
   },
+  async starred() {
+    const liked = (await store.get("liked")) || [];
+    const idx = (await store.get("pubindex", true)) || {};
+    // Summaries for the ids still public, ranked like the gallery.
+    return liked.map((id) => idx[id]).filter(Boolean).sort((a, b) => score(b) - score(a));
+  },
 };
 
 const publicUser = (u) => ({ id: u.id, name: u.name, email: u.email });

@@ -153,6 +153,12 @@ export const api = {
     if (!jwt) return [];
     return call("/likes");
   },
+  async starred() {
+    // Summaries for the networks the caller has liked. Signed-in only.
+    const jwt = await idToken();
+    if (!jwt) return [];
+    return call("/starred");
+  },
 
   // Seeding is demo-only in the local adapter; on AWS it's a no-op.
   async ensureSeed() {},
