@@ -23,7 +23,7 @@ export default function App() {
   const [starred, setStarred] = useState([]);
 
   useEffect(() => {
-    api.currentUser().then((u) => { setUser(u); setUserLoaded(true); });
+    api.currentUser().then((u) => { setUser(u); setUserLoaded(true); if (u) api.syncProfile?.().catch(() => {}); });
     api.likedIds().then(setLiked);
     api.starredIds().then(setStarred);
     api.ensureSeed();

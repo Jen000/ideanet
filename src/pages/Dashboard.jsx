@@ -10,6 +10,7 @@ export default function Dashboard({ user, onOpen, onOpenPublic, onHome, onSignOu
   const [nets, setNets] = useState([]);
   const [stars, setStars] = useState([]);
   const [starIds, setStarIds] = useState([]);
+  const [shared, setShared] = useState([]);
   const [loaded, setLoaded] = useState(false);
 
   const refresh = () => api.myNetworks().then(setNets);
@@ -18,6 +19,7 @@ export default function Dashboard({ user, onOpen, onOpenPublic, onHome, onSignOu
       api.myNetworks().then(setNets),
       api.starred().then(setStars),
       api.starredIds().then(setStarIds),
+      api.sharedWithMe().then(setShared),
     ]).finally(() => setLoaded(true));
   }, []);
 
@@ -65,10 +67,34 @@ export default function Dashboard({ user, onOpen, onOpenPublic, onHome, onSignOu
         {/* tabs */}
         <div className="flex gap-1 mb-6" style={{ borderBottom: "1px solid rgba(0,240,255,.1)" }}>
           <TabBtn on={tab === "created"} onClick={() => setTab("created")}>Created{loaded ? ` · ${nets.length}` : ""}</TabBtn>
+          <TabBtn on={tab === "shared"} onClick={() => setTab("shared")}>Shared with me{loaded ? ` · ${shared.length}` : ""}</TabBtn>
           <TabBtn on={tab === "starred"} onClick={() => setTab("starred")}>Starred{loaded ? ` · ${stars.length}` : ""}</TabBtn>
         </div>
 
-        {tab === "created" ? (
+        {tab === "shared" && (
+          shared.length === 0 ? (
+            <Empty title="Nothing shared with you yet." body="When someone shares a private network with you, it shows up here — as a viewer you can read it, as an editor you can work on it alongside them." />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {shared.map((s) => (
+                <button key={s.id} onClick={() => onOpen(s.id)} className="text-left rounded overflow-hidden transition-transform hover:-translate-y-0.5" style={panel}>
+                  <div style={{ borderBottom: "1px solid rgba(0,240,255,.1)", background: "rgba(0,0,0,.35)" }}>
+                    <MiniPreview preview={s.preview} />
+                  </div>
+                  <div className="p-4">
+                    <div className="text-xs mb-1.5" style={{ color: "#dff6fb" }}>{s.title}</div>
+                    <div className="flex items-center justify-between text-[10px]" style={{ color: "#4f7280" }}>
+                      <span>by {s.author}</span>
+                      <span style={{ color: s.role === "editor" ? "#39ff88" : "#7fd4e2" }}>{s.role === "editor" ? "can edit" : "view only"} · {s.nodeCount} nodes</span>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )
+        )}
+
+        {tab === "created" && (
           nets.length === 0 ? (
             <Empty title="Start with one idea." body="A new network opens with a single node. Double-click the canvas to add more, or drag a node's ⊕ handle to empty space to grow a connected branch.">
               <Btn tone="primary" onClick={create}>+ new network</Btn>
@@ -100,9 +126,12 @@ export default function Dashboard({ user, onOpen, onOpenPublic, onHome, onSignOu
               ))}
             </div>
           )
-        ) : stars.length === 0 ? (
-          <Empty title="Nothing saved yet." body="Open any network and tap ☆ save to keep it here for later. Starred is your private reading list — separate from the ♥ likes you leave in the gallery." />
-        ) : (
+        )}
+
+        {tab === "starred" && (
+          stars.length === 0 ? (
+            <Empty title="Nothing saved yet." body="Open any network and tap ☆ save to keep it here for later. Starred is your private reading list — separate from the ♥ likes you leave in the gallery." />
+          ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {stars.map((s) => (
               <button key={s.id} onClick={() => openStar(s.id)} className="text-left rounded overflow-hidden transition-transform hover:-translate-y-0.5" style={panel}>
@@ -121,6 +150,7 @@ export default function Dashboard({ user, onOpen, onOpenPublic, onHome, onSignOu
               </button>
             ))}
           </div>
+          )
         )}
       </div>
     </Shell>

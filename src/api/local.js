@@ -139,20 +139,47 @@ export const api = {
     const user = accounts[s.email];
     return user ? publicUser(user) : null;
   },
+  // Directory is the accounts map here, so nothing to sync.
+  async syncProfile() { return null; },
   async myNetworks() {
-    return Object.values((await store.get("mynets")) || {}).sort((a, b) => b.updatedAt - a.updatedAt);
+    const s = await store.get("session");
+    const me = s?.userId;
+    const all = (await store.get("mynets")) || {};
+    return Object.values(all).filter((n) => !me || n.ownerId === me).sort((a, b) => b.updatedAt - a.updatedAt);
+  },
+  // Open any accessible network with the caller's role (owner / editor / viewer).
+  async openNetwork(id) {
+    const s = await store.get("session");
+    const me = s?.userId;
+    const all = (await store.get("mynets")) || {};
+    if (all[id] && all[id].ownerId === me) return { net: all[id], role: "owner" };
+    const shares = (await store.get(`shares:${id}`, true)) || [];
+    const mine = shares.find((c) => c.userId === me);
+    const mirror = await store.get(`mirror:${id}`, true);
+    if (mine && mirror) return { net: mirror, role: mine.role };
+    if (all[id]) return { net: all[id], role: "owner" };
+    return null;
   },
   async saveNetwork(net) {
-    const all = (await store.get("mynets")) || {};
-    all[net.id] = { ...net, updatedAt: now() };
-    await store.set("mynets", all);
-    if (net.visibility === "public") {
-      await store.set(`pub:${net.id}`, all[net.id], true);
-      const idx = (await store.get("pubindex", true)) || {};
-      idx[net.id] = { ...summarize(all[net.id]), likes: idx[net.id]?.likes ?? 0, views: idx[net.id]?.views ?? 0 };
-      await store.set("pubindex", idx, true);
+    const s = await store.get("session");
+    const me = s?.userId;
+    const stamped = { ...net, ownerId: net.ownerId || me, updatedAt: now() };
+    // Owner keeps it in their own list; an editor only updates the shared copy.
+    if (stamped.ownerId === me) {
+      const all = (await store.get("mynets")) || {};
+      all[net.id] = stamped;
+      await store.set("mynets", all);
     }
-    return all[net.id];
+    await store.set(`mirror:${net.id}`, stamped, true); // cross-account canonical
+    if (stamped.visibility === "public") {
+      await store.set(`pub:${net.id}`, stamped, true);
+      const idx = (await store.get("pubindex", true)) || {};
+      idx[net.id] = { ...summarize(stamped), likes: idx[net.id]?.likes ?? 0, views: idx[net.id]?.views ?? 0 };
+      await store.set("pubindex", idx, true);
+    } else {
+      await api.unpublish(net.id);
+    }
+    return stamped;
   },
   async unpublish(id) {
     const idx = (await store.get("pubindex", true)) || {};
@@ -164,6 +191,66 @@ export const api = {
     delete all[id];
     await store.set("mynets", all);
     await api.unpublish(id);
+    // Tear down any shares of this network.
+    const shares = (await store.get(`shares:${id}`, true)) || [];
+    for (const c of shares) {
+      const mem = ((await store.get(`member:${c.userId}`, true)) || []).filter((x) => x !== id);
+      await store.set(`member:${c.userId}`, mem, true);
+    }
+    await store.set(`shares:${id}`, [], true);
+  },
+
+  /* ------------------------------------------------------- sharing & roles */
+  async sharedWithMe() {
+    const s = await store.get("session");
+    const me = s?.userId;
+    if (!me) return [];
+    const ids = (await store.get(`member:${me}`, true)) || [];
+    const out = [];
+    for (const id of ids) {
+      const net = await store.get(`mirror:${id}`, true);
+      const shares = (await store.get(`shares:${id}`, true)) || [];
+      const mine = shares.find((c) => c.userId === me);
+      if (net && mine) out.push({ ...summarize(net), role: mine.role });
+    }
+    return out.sort((a, b) => b.updatedAt - a.updatedAt);
+  },
+  async collaborators(id) {
+    return (await store.get(`shares:${id}`, true)) || [];
+  },
+  async shareNetwork(id, email, role) {
+    const key = email.trim().toLowerCase();
+    const accounts = (await store.get("accounts")) || {};
+    const target = accounts[key];
+    if (!target) throw new Error("No IdeaNet user with that email — they need an account first.");
+    const s = await store.get("session");
+    if (target.id === s?.userId) throw new Error("You already own this network.");
+    const collab = { userId: target.id, email: key, name: target.name, role: role === "editor" ? "editor" : "viewer" };
+    const shares = ((await store.get(`shares:${id}`, true)) || []).filter((c) => c.userId !== target.id);
+    shares.push(collab);
+    await store.set(`shares:${id}`, shares, true);
+    const mem = (await store.get(`member:${target.id}`, true)) || [];
+    if (!mem.includes(id)) { mem.push(id); await store.set(`member:${target.id}`, mem, true); }
+    // reflect on the owner's copy + mirror
+    const all = (await store.get("mynets")) || {};
+    if (all[id]) {
+      all[id] = { ...all[id], collaborators: shares };
+      await store.set("mynets", all);
+      await store.set(`mirror:${id}`, all[id], true);
+    }
+    return collab;
+  },
+  async unshareNetwork(id, userId) {
+    const shares = ((await store.get(`shares:${id}`, true)) || []).filter((c) => c.userId !== userId);
+    await store.set(`shares:${id}`, shares, true);
+    const mem = ((await store.get(`member:${userId}`, true)) || []).filter((x) => x !== id);
+    await store.set(`member:${userId}`, mem, true);
+    const all = (await store.get("mynets")) || {};
+    if (all[id]) {
+      all[id] = { ...all[id], collaborators: shares };
+      await store.set("mynets", all);
+      await store.set(`mirror:${id}`, all[id], true);
+    }
   },
   async gallery() {
     const idx = (await store.get("pubindex", true)) || {};
