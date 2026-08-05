@@ -221,6 +221,7 @@ export class IdeaNetStack extends cdk.Stack {
     new cdk.CfnOutput(this, "UserPoolClientId", { value: userPoolClient.userPoolClientId });
     new cdk.CfnOutput(this, "ApiBaseUrl", { value: api.apiEndpoint });
     new cdk.CfnOutput(this, "SiteBucketName", { value: siteBucket.bucketName });
+    new cdk.CfnOutput(this, "SiteDistributionId", { value: distribution.distributionId });
     new cdk.CfnOutput(this, "SiteUrl", { value: `https://${distribution.distributionDomainName}` });
   }
 }
