@@ -4,6 +4,10 @@ export interface NodeType { id: string; name: string; color: string; size: numbe
 export interface GraphNode { id: string; label: string; typeId: string; notes: string; x: number; y: number; collapsed: boolean; }
 export interface Edge { id: string; source: string; target: string; label: string; directed: boolean; }
 
+export type Role = "owner" | "editor" | "viewer";
+
+export interface Collaborator { userId: string; email: string; name: string; role: "editor" | "viewer"; }
+
 export interface Network {
   id: string;
   title: string;
@@ -19,6 +23,7 @@ export interface Network {
   views: number;
   createdAt: number;
   updatedAt: number;
+  collaborators?: Collaborator[]; // private sharing; absent = not shared
 }
 
 export interface Summary {

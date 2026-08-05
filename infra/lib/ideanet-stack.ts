@@ -170,10 +170,15 @@ export class IdeaNetStack extends cdk.Stack {
     const galleryInt = new HttpLambdaIntegration("GalleryInt", galleryFn);
     const likesInt = new HttpLambdaIntegration("LikesInt", likesFn);
 
-    // Owner-scoped (JWT required).
+    // Owner-scoped (JWT required). Access within these is enforced per-role in
+    // the handler (owner / editor / viewer).
     api.addRoutes({ path: "/networks", methods: [apigw.HttpMethod.GET], integration: networksInt, authorizer });
-    api.addRoutes({ path: "/networks/{id}", methods: [apigw.HttpMethod.PUT, apigw.HttpMethod.DELETE], integration: networksInt, authorizer });
+    api.addRoutes({ path: "/networks/{id}", methods: [apigw.HttpMethod.GET, apigw.HttpMethod.PUT, apigw.HttpMethod.DELETE], integration: networksInt, authorizer });
     api.addRoutes({ path: "/networks/{id}/unpublish", methods: [apigw.HttpMethod.POST], integration: networksInt, authorizer });
+    api.addRoutes({ path: "/networks/{id}/collaborators", methods: [apigw.HttpMethod.GET, apigw.HttpMethod.POST], integration: networksInt, authorizer });
+    api.addRoutes({ path: "/networks/{id}/collaborators/{userId}", methods: [apigw.HttpMethod.DELETE], integration: networksInt, authorizer });
+    api.addRoutes({ path: "/shared", methods: [apigw.HttpMethod.GET], integration: networksInt, authorizer });
+    api.addRoutes({ path: "/me", methods: [apigw.HttpMethod.POST], integration: networksInt, authorizer });
     api.addRoutes({ path: "/networks/{id}/like", methods: [apigw.HttpMethod.POST], integration: likesInt, authorizer });
     api.addRoutes({ path: "/likes", methods: [apigw.HttpMethod.GET], integration: likesInt, authorizer });
     api.addRoutes({ path: "/networks/{id}/star", methods: [apigw.HttpMethod.POST], integration: likesInt, authorizer });

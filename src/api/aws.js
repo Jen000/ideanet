@@ -92,6 +92,7 @@ export const api = {
     const session = await new Promise((resolve, reject) => {
       user.authenticateUser(details, { onSuccess: resolve, onFailure: (err) => reject(asError(err)) });
     });
+    api.syncProfile().catch(() => {}); // register in the directory so others can share by email
     return publicUser(session);
   },
 
@@ -111,15 +112,54 @@ export const api = {
     });
   },
 
+  // Record the signed-in user in the directory so others can share by email.
+  async syncProfile() {
+    const jwt = await idToken();
+    if (!jwt) return null;
+    return call("/me", { method: "POST" });
+  },
+
   /* --------------------------------------------- the signed-in user's networks */
   async myNetworks() {
     return call("/networks");
+  },
+  // Open any network the caller can access; returns { net, role }. saveNetwork
+  // sends net.updatedAt as-is, which the server uses as the stale-edit base.
+  async openNetwork(id) {
+    try {
+      return await call(`/networks/${encodeURIComponent(id)}`);
+    } catch (err) {
+      // Resilient to a backend that predates this route: fall back to the
+      // owner's own list so editing your own networks keeps working.
+      if (err.status === 404) {
+        const mine = await call("/networks");
+        const net = mine.find((n) => n.id === id);
+        if (net) return { net, role: "owner" };
+      }
+      throw err;
+    }
   },
   async saveNetwork(net) {
     return call(`/networks/${encodeURIComponent(net.id)}`, { method: "PUT", body: net });
   },
   async deleteNetwork(id) {
     await call(`/networks/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+
+  /* ------------------------------------------------------- sharing & roles */
+  async sharedWithMe() {
+    const jwt = await idToken();
+    if (!jwt) return [];
+    return call("/shared");
+  },
+  async collaborators(id) {
+    return call(`/networks/${encodeURIComponent(id)}/collaborators`);
+  },
+  async shareNetwork(id, email, role) {
+    return call(`/networks/${encodeURIComponent(id)}/collaborators`, { method: "POST", body: { email, role } });
+  },
+  async unshareNetwork(id, userId) {
+    await call(`/networks/${encodeURIComponent(id)}/collaborators/${encodeURIComponent(userId)}`, { method: "DELETE" });
   },
 
   /* --------------------------------------------------------- public gallery */

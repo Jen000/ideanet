@@ -4,8 +4,13 @@ export const userPk = (userId: string) => `USER#${userId}`;
 export const netSk = (netId: string) => `NET#${netId}`;
 export const likeSk = (netId: string) => `LIKE#${netId}`;
 export const starSk = (netId: string) => `STAR#${netId}`; // private bookmark, distinct from a public like
+export const shareSk = (netId: string) => `SHARE#${netId}`; // a network shared *with* this user
 
 export const publicPk = (netId: string) => `PUBLIC#${netId}`;
 export const PUBLIC_SK = "NET";
 
 export const GSI_PUBLIC_PK = "VISIBILITY#public";
+
+// User directory: look up a user by email so networks can be shared by email.
+export const emailPk = (email: string) => `EMAIL#${email.trim().toLowerCase()}`;
+export const DIRECTORY_SK = "USER";
