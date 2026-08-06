@@ -129,13 +129,14 @@ export const api = {
     try {
       return await call(`/networks/${encodeURIComponent(id)}`);
     } catch (err) {
-      // Resilient to a backend that predates this route: fall back to the
-      // owner's own list so editing your own networks keeps working.
-      if (err.status === 404) {
-        const mine = await call("/networks");
-        const net = mine.find((n) => n.id === id);
-        if (net) return { net, role: "owner" };
-      }
+      // A backend that predates this route returns 404 — and because a missing
+      // route carries no CORS headers, the browser surfaces it as a network
+      // error with no status. Either way, fall back to the owner's own list so
+      // your networks keep opening. /networks is a real route (has CORS), so
+      // this fallback succeeds when the per-id route doesn't exist yet.
+      const mine = await call("/networks").catch(() => null);
+      const net = mine && mine.find((n) => n.id === id);
+      if (net) return { net, role: "owner" };
       throw err;
     }
   },
@@ -150,7 +151,8 @@ export const api = {
   async sharedWithMe() {
     const jwt = await idToken();
     if (!jwt) return [];
-    return call("/shared");
+    // Fail soft: if the route isn't deployed yet, the dashboard still loads.
+    try { return await call("/shared"); } catch { return []; }
   },
   async collaborators(id) {
     return call(`/networks/${encodeURIComponent(id)}/collaborators`);
