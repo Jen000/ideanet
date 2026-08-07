@@ -26,7 +26,29 @@ one with `-c env=dev|prod` (there are npm scripts for both):
 backend; `npm run build` (production) reads `.env.production` → the prod backend.
 So local development never points at prod.
 
-## Deploy
+## Release process — always dev first
+
+**Test every change in dev before promoting to prod.** Prod has real users.
+
+```bash
+# 1. deploy the backend change to dev, then the dev frontend
+cd infra && npm run deploy:dev
+cd .. && ./deploy-web.sh dev          # builds with dev config, ships to dev CloudFront
+
+# 2. open the dev URL it prints and test
+
+# 3. only once it's good, promote to prod
+cd infra && npm run deploy:prod       # backend
+#   then merge to main -> GitHub Pages redeploys the prod frontend
+```
+
+`deploy-web.sh <env>` reads the stack's outputs, builds the frontend with that
+environment's config (base `/`), syncs it to the env's S3 bucket, and
+invalidates CloudFront — so the **dev** site is a real browser URL, separate
+from prod. Prod's frontend normally ships to GitHub Pages via the push-to-main
+workflow, but `./deploy-web.sh prod` can push it to the prod CloudFront too.
+
+## Deploy (backend)
 
 ```bash
 cd infra
@@ -97,14 +119,10 @@ takes the data with it — delete those resources by hand if you really mean to.
   consistent, lagging by the batch window (~30s). A DLQ catches poison messages.
 
 - **Frontend hosting** — a private S3 bucket + CloudFront distribution (Origin
-  Access Control, SPA fallback to `index.html`). Created so the target exists,
-  but **nothing is deployed to it yet**. To ship the frontend later:
-
-  ```bash
-  cd .. && npm run build
-  aws s3 sync dist/ s3://<SiteBucketName>/ --delete --profile default
-  aws cloudfront create-invalidation --distribution-id <id> --paths '/*' --profile default
-  ```
+  Access Control, SPA fallback to `index.html` for clean-URL deep links). This
+  is the **dev** environment's browser URL; deploy to it with `./deploy-web.sh
+  dev` from the repo root (see "Release process" above). Prod's frontend ships
+  to GitHub Pages by default, so its bucket usually stays empty.
 
 ## Server-side authorization
 
