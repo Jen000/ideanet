@@ -252,6 +252,27 @@ export const api = {
       await store.set(`mirror:${id}`, all[id], true);
     }
   },
+
+  /* -------------------------------------------------------------- comments */
+  async comments(id) {
+    return (await store.get(`comments:${id}`, true)) || [];
+  },
+  async addComment(id, text) {
+    const s = await store.get("session");
+    const accounts = (await store.get("accounts")) || {};
+    const me = accounts[s?.email];
+    const t = (text || "").trim().slice(0, 2000);
+    if (!t) throw new Error("Comment can't be empty.");
+    const comment = { id: uid("c"), netId: id, authorId: s?.userId, authorName: me?.name || "you", text: t, createdAt: now() };
+    const list = (await store.get(`comments:${id}`, true)) || [];
+    list.push(comment);
+    await store.set(`comments:${id}`, list, true);
+    return comment;
+  },
+  async deleteComment(id, commentId) {
+    const list = ((await store.get(`comments:${id}`, true)) || []).filter((c) => c.id !== commentId);
+    await store.set(`comments:${id}`, list, true);
+  },
   async gallery() {
     const idx = (await store.get("pubindex", true)) || {};
     return Object.values(idx).sort((a, b) => score(b) - score(a));
