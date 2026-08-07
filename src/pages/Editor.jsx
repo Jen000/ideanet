@@ -16,6 +16,7 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
   const [activeTypeId, setActiveTypeId] = useState("t_solution");
   const [centerOnSelect, setCenterOnSelect] = useState(true);
   const [showTypes, setShowTypes] = useState(false);
+  const [showInspector, setShowInspector] = useState(true);
   const [collabs, setCollabs] = useState([]);
   const [shareEmail, setShareEmail] = useState("");
   const [shareRole, setShareRole] = useState("viewer");
@@ -74,6 +75,9 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
     return () => window.removeEventListener("keydown", onKey);
   }, [selected, ro]);
 
+  // Selecting a node/edge reopens the details panel (it can be dismissed).
+  useEffect(() => { if (selected) setShowInspector(true); }, [selected]);
+
   const reload = async () => { setNotFound(false); await load(); setSaved("saved"); setSelected(null); };
   const doShare = async () => {
     setShareErr("");
@@ -90,7 +94,7 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
   };
 
   if (notFound) return <Shell><div className="min-h-screen flex items-center justify-center text-xs text-center px-6" style={{ color: "#5f8492" }}>This network doesn't exist, or it isn't shared with you.<br /><button onClick={onExit} className="mt-3" style={{ color: "#00f0ff" }}>← back</button></div></Shell>;
-  if (!net) return <Shell><div className="min-h-screen flex items-center justify-center text-xs" style={{ color: "#5f8492" }}>Loading network…</div></Shell>;
+  if (!net) return <Shell><div className="min-h-screen flex flex-col items-center justify-center gap-3"><Spinner /><div className="text-[10px] tracking-widest" style={{ color: "#5f8492" }}>LOADING</div></div></Shell>;
 
   const results = q.trim()
     ? net.nodes.filter((n) => `${n.label} ${n.notes}`.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 8)
@@ -215,9 +219,13 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
             {selected && <Btn onClick={() => setSelected(null)}>clear selection</Btn>}
           </div>
 
-          {/* right: inspector */}
-          {(selNode || selEdge || !ro) && (
-            <div className="absolute top-3 right-3 w-64 z-20 rounded p-3 max-h-[calc(100%-1.5rem)] overflow-y-auto" style={panel}>
+          {/* right: inspector (dismissible — a panel on desktop, a pop-over on mobile) */}
+          {!showInspector && (selNode || selEdge || !ro) && (
+            <button onClick={() => setShowInspector(true)} className="absolute top-3 right-3 z-20 rounded px-2.5 py-1.5 text-[10px]" style={{ ...panel, color: "#7fd4e2" }}>details ▸</button>
+          )}
+          {showInspector && (selNode || selEdge || !ro) && (
+            <div className="absolute top-3 right-3 w-64 max-w-[78vw] z-20 rounded p-3 pr-6 max-h-[calc(100%-1.5rem)] overflow-y-auto" style={panel}>
+              <button onClick={() => setShowInspector(false)} title="Close" className="absolute top-1 right-1.5 text-base leading-none px-1" style={{ color: "#6f94a1" }}>×</button>
               {selNode ? (
                 <>
                   <div className="text-[10px] mb-2" style={{ color: "#5f8492" }}>NODE</div>
@@ -311,6 +319,12 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
 }
 
 /* Little type-picker glyph so the shape choice is visible, not just named. */
+function Spinner() {
+  return (
+    <div className="animate-spin" style={{ width: 26, height: 26, borderRadius: "50%", border: "2.5px solid rgba(0,240,255,.22)", borderTopColor: "#00f0ff", boxShadow: "0 0 10px rgba(0,240,255,.35)" }} />
+  );
+}
+
 function ShapeIcon({ shape, color }) {
   const s = { fill: "none", stroke: color, strokeWidth: 1.4 };
   return (
