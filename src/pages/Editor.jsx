@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { api } from "../api";
 import { DEFAULT_TYPES, SWATCHES, SHAPES, uid } from "../constants";
 import { radialLayout } from "../graph";
-import { Shell, Btn, Tag, panel, inputCls, inputStyle } from "../ui";
+import { Shell, Btn, Tag, panel, inputCls, inputStyle, Spinner } from "../ui";
 import Canvas from "../Canvas";
 
 /* ================================================================== EDITOR */
@@ -319,12 +319,6 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
 }
 
 /* Little type-picker glyph so the shape choice is visible, not just named. */
-function Spinner() {
-  return (
-    <div className="animate-spin" style={{ width: 26, height: 26, borderRadius: "50%", border: "2.5px solid rgba(0,240,255,.22)", borderTopColor: "#00f0ff", boxShadow: "0 0 10px rgba(0,240,255,.35)" }} />
-  );
-}
-
 function ShapeIcon({ shape, color }) {
   const s = { fill: "none", stroke: color, strokeWidth: 1.4 };
   return (
