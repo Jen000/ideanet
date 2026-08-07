@@ -44,3 +44,7 @@ export const Tag = ({ children, on, onClick }) => (
     {children}
   </button>
 );
+
+export const Spinner = ({ size = 26 }) => (
+  <div className="animate-spin" style={{ width: size, height: size, borderRadius: "50%", border: "2.5px solid rgba(0,240,255,.22)", borderTopColor: "#00f0ff", boxShadow: "0 0 10px rgba(0,240,255,.35)" }} />
+);

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { api, summarize } from "../api";
 import { DEFAULT_TYPES, uid, now } from "../constants";
-import { Shell, Btn, Tag, panel } from "../ui";
+import { Shell, Btn, Tag, panel, Spinner } from "../ui";
 import MiniPreview from "../MiniPreview";
 
 /* =============================================================== DASHBOARD */
@@ -71,7 +71,9 @@ export default function Dashboard({ user, onOpen, onOpenPublic, onHome, onSignOu
           <TabBtn on={tab === "starred"} onClick={() => setTab("starred")}>Starred{loaded ? ` · ${stars.length}` : ""}</TabBtn>
         </div>
 
-        {tab === "shared" && (
+        {!loaded && <Loading />}
+
+        {loaded && tab === "shared" && (
           shared.length === 0 ? (
             <Empty title="Nothing shared with you yet." body="When someone shares a private network with you, it shows up here — as a viewer you can read it, as an editor you can work on it alongside them." />
           ) : (
@@ -94,7 +96,7 @@ export default function Dashboard({ user, onOpen, onOpenPublic, onHome, onSignOu
           )
         )}
 
-        {tab === "created" && (
+        {loaded && tab === "created" && (
           nets.length === 0 ? (
             <Empty title="Start with one idea." body="A new network opens with a single node. Double-click the canvas to add more, or drag a node's ⊕ handle to empty space to grow a connected branch.">
               <Btn tone="primary" onClick={create}>+ new network</Btn>
@@ -128,7 +130,7 @@ export default function Dashboard({ user, onOpen, onOpenPublic, onHome, onSignOu
           )
         )}
 
-        {tab === "starred" && (
+        {loaded && tab === "starred" && (
           stars.length === 0 ? (
             <Empty title="Nothing saved yet." body="Open any network and tap ☆ save to keep it here for later. Starred is your private reading list — separate from the ♥ likes you leave in the gallery." />
           ) : (
@@ -162,6 +164,10 @@ const TabBtn = ({ on, onClick, children }) => (
     style={{ color: on ? "#eafeff" : "#5f8492", borderBottom: on ? "2px solid #00f0ff" : "2px solid transparent" }}>
     {children}
   </button>
+);
+
+const Loading = () => (
+  <div className="py-20 flex justify-center"><Spinner /></div>
 );
 
 const Empty = ({ title, body, children }) => (
