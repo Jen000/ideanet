@@ -221,7 +221,6 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
         }
       } else if (src) {
         const sp = P(src);
-        // dropped on empty canvas (and dragged a real distance) → create a new
         // connected node. In 3D we offset from the source in the flat plane so
         // its placement stays predictable; in 2D it lands under the cursor.
         if (Math.hypot(w.x - sp.x, w.y - sp.y) > radiusOf(src) * sp.s + 24) {
