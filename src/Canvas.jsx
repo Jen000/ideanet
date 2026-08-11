@@ -3,7 +3,7 @@ import { MONO, DEFAULT_TYPES, uid, clamp } from "./constants";
 import { useGraphIndex, hiddenByCollapse } from "./graph";
 
 /* ================================================================== CANVAS */
-export default function Canvas({ net, onChange, readOnly, selected, setSelected, centerOnSelect, activeTypeId }) {
+export default function Canvas({ net, onChange, readOnly, selected, setSelected, centerOnSelect, activeTypeId, onNodeCreate }) {
   const svgRef = useRef(null);
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
   const [live, setLive] = useState(null); // in-progress connection
@@ -158,6 +158,7 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
           edges: [...net.edges, { id: uid("e"), source: d.from, target: id, label: "", directed: true }],
         });
         setSelected({ kind: "node", id });
+        onNodeCreate?.();
       }
       return;
     }
@@ -174,6 +175,7 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
       nodes: [...net.nodes, { id, label: "New node", typeId: activeTypeId || net.nodeTypes[0].id, notes: "", x: Math.round(w.x), y: Math.round(w.y), collapsed: false }],
     });
     setSelected({ kind: "node", id });
+    onNodeCreate?.();
   };
 
   const focus = selected?.kind === "node" ? selected.id : null;
