@@ -25,6 +25,8 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
   const [shareRole, setShareRole] = useState("viewer");
   const [shareErr, setShareErr] = useState("");
   const first = useRef(true);
+  const topicRef = useRef(null);
+  const focusNew = useRef(false); // focus the topic field when a node is freshly created
   const baseUpdatedAt = useRef(publicNet ? publicNet.updatedAt : null);
 
   const ro = readOnly || role === "viewer"; // effective read-only (public view or a view-only collaborator)
@@ -99,12 +101,25 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
     await api.deleteComment(net.id, cid).catch(() => {});
   };
 
+  // When a node was just created, drop the cursor into its topic field and
+  // select the placeholder so the user can type straight away.
+  useEffect(() => {
+    if (selected?.kind === "node" && focusNew.current) {
+      focusNew.current = false;
+      setShowInspector(true);
+      requestAnimationFrame(() => { topicRef.current?.focus(); topicRef.current?.select(); });
+    }
+    /* eslint-disable-next-line */
+  }, [selected?.id]);
+
   const reload = async () => { setNotFound(false); await load(); setSaved("saved"); setSelected(null); };
   const doShare = async () => {
     setShareErr("");
     if (!shareEmail.trim()) return;
+    // On a public network, viewer access is meaningless — only editors are added.
+    const role = net.visibility === "public" ? "editor" : shareRole;
     try {
-      const c = await api.shareNetwork(net.id, shareEmail, shareRole);
+      const c = await api.shareNetwork(net.id, shareEmail, role);
       setCollabs((cs) => [...cs.filter((x) => x.userId !== c.userId), c]);
       setShareEmail("");
     } catch (e) { setShareErr(e.message); }
@@ -128,6 +143,7 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
 
   const addNode = () => {
     const id = uid();
+    focusNew.current = true;
     setNet((n) => ({ ...n, nodes: [...n.nodes, { id, label: "New node", typeId: activeTypeId, notes: "", x: 480 + Math.random() * 90, y: 320 + Math.random() * 90, collapsed: false }] }));
     setSelected({ kind: "node", id });
   };
@@ -172,7 +188,7 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
 
         <div className="relative flex-1">
           <Canvas net={net} onChange={setNet} readOnly={ro} selected={selected} setSelected={setSelected}
-            centerOnSelect={centerOnSelect} activeTypeId={activeTypeId} />
+            centerOnSelect={centerOnSelect} activeTypeId={activeTypeId} onNodeCreate={() => { focusNew.current = true; }} />
 
           {/* left: search + legend */}
           <div className="absolute top-3 left-3 w-56 z-20 flex flex-col gap-2">
@@ -252,7 +268,7 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
                 <>
                   <div className="text-[10px] mb-2" style={{ color: "#5f8492" }}>NODE</div>
                   <label className="text-[9px] block mb-1" style={{ color: "#5f8492" }}>TOPIC · shown on the node</label>
-                  <input value={selNode.label} onChange={(e) => patchNode({ label: e.target.value })} disabled={ro}
+                  <input ref={topicRef} value={selNode.label} onChange={(e) => patchNode({ label: e.target.value })} disabled={ro}
                     placeholder="short topic" className={`${inputCls} mb-2`} style={inputStyle} />
                   <select value={selNode.typeId} onChange={(e) => patchNode({ typeId: e.target.value })} disabled={ro}
                     className={`${inputCls} mb-2`} style={inputStyle}>
@@ -302,16 +318,27 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
                           : "Private — only you and people you share it with can see it."}
                       </p>
 
-                      <div className="text-[10px] mb-1.5 pt-3" style={{ color: "#5f8492", borderTop: "1px solid rgba(0,240,255,.1)" }}>SHARE (private)</div>
-                      <div className="flex gap-1.5 mb-1.5">
+                      <div className="text-[10px] mb-1.5 pt-3" style={{ color: "#5f8492", borderTop: "1px solid rgba(0,240,255,.1)" }}>
+                        {net.visibility === "public" ? "ADD EDITORS" : "SHARE"}
+                      </div>
+                      <div className="flex gap-1.5 mb-1">
                         <input value={shareEmail} onChange={(e) => setShareEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && doShare()}
                           placeholder="email" type="email" className={inputCls} style={{ ...inputStyle, flex: 1 }} />
-                        <select value={shareRole} onChange={(e) => setShareRole(e.target.value)} className="rounded text-[10px] px-1" style={inputStyle}>
-                          <option value="viewer" style={{ background: "#06101a" }}>viewer</option>
-                          <option value="editor" style={{ background: "#06101a" }}>editor</option>
-                        </select>
+                        {net.visibility === "public" ? (
+                          <span className="flex items-center px-2 text-[10px]" style={{ color: "#39ff88" }}>editor</span>
+                        ) : (
+                          <select value={shareRole} onChange={(e) => setShareRole(e.target.value)} className="rounded text-[10px] px-1" style={inputStyle}>
+                            <option value="viewer" style={{ background: "#06101a" }}>viewer</option>
+                            <option value="editor" style={{ background: "#06101a" }}>editor</option>
+                          </select>
+                        )}
                         <Btn tone="primary" onClick={doShare}>add</Btn>
                       </div>
+                      <p className="text-[9px] leading-relaxed mb-1.5" style={{ color: "#456773" }}>
+                        {net.visibility === "public"
+                          ? "It's already visible to everyone — add people here to let them edit it."
+                          : "Add people by email as a viewer (read-only) or editor."}
+                      </p>
                       {shareErr && <div className="text-[9px] mb-2" style={{ color: "#ff90b0" }}>{shareErr}</div>}
                       {collabs.length > 0 && (
                         <div className="flex flex-col gap-1 mb-2">
@@ -376,7 +403,6 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
   );
 }
 
-/* Little type-picker glyph so the shape choice is visible, not just named. */
 function timeAgo(ts) {
   const s = Math.floor((Date.now() - ts) / 1000);
   if (s < 60) return "just now";
@@ -386,6 +412,7 @@ function timeAgo(ts) {
   return new Date(ts).toLocaleDateString();
 }
 
+/* Little type-picker glyph so the shape choice is visible, not just named. */
 function ShapeIcon({ shape, color }) {
   const s = { fill: "none", stroke: color, strokeWidth: 1.4 };
   return (

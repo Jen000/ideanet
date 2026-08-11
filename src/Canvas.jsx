@@ -3,9 +3,11 @@ import { MONO, DEFAULT_TYPES, uid, clamp } from "./constants";
 import { useGraphIndex, hiddenByCollapse } from "./graph";
 
 /* ================================================================== CANVAS */
-export default function Canvas({ net, onChange, readOnly, selected, setSelected, centerOnSelect, activeTypeId }) {
+export default function Canvas({ net, onChange, readOnly, selected, setSelected, centerOnSelect, activeTypeId, onNodeCreate }) {
   const svgRef = useRef(null);
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
+  const [view3d, setView3d] = useState(true);           // tilted perspective on by default
+  const [rot, setRot] = useState({ yaw: -0.62, pitch: 0.5 }); // camera orbit angles
   const [live, setLive] = useState(null); // in-progress connection
   const [hover, setHover] = useState(null);
   const drag = useRef(null);
@@ -25,6 +27,58 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
     /* eslint-disable-next-line */
   }, [net.nodes, net.nodeTypes]);
   const radiusOf = (n) => radii[n.id] ?? typeOf(n).size;
+
+  /* -------------------------------------------------------------- 3d layout
+     Nodes keep the (x,y) the user arranged; we synthesise a depth (z) from the
+     graph so the figure gains volume and edges land on different planes instead
+     of criss-crossing on one flat sheet. Depth follows graph distance from the
+     most-connected node (a bowl from the core outward), with a stable per-node
+     jitter so siblings aren't perfectly coplanar. Nothing here is persisted. */
+  const solid = useMemo(() => {
+    const nodes = net.nodes;
+    if (!nodes.length) return { z: {}, cx: 0, cy: 0, cz: 0 };
+    const z = graphDepths(net);
+    let cx = 0, cy = 0, cz = 0;
+    for (const n of nodes) { cx += n.x; cy += n.y; cz += z[n.id] || 0; }
+    cx /= nodes.length; cy /= nodes.length; cz /= nodes.length;
+    return { z, cx, cy, cz };
+  }, [net.nodes, net.edges]);
+
+  const FOCAL = 1250; // perspective focal length; larger = flatter
+  // Project a node into outer-<g> space (which pan/zoom then transforms). In 2D
+  // mode this is the identity, so every downstream calc is mode-agnostic.
+  const proj = useMemo(() => {
+    const m = {};
+    if (!view3d) {
+      for (const n of net.nodes) m[n.id] = { x: n.x, y: n.y, s: 1, depth: 0 };
+      return m;
+    }
+    const { z, cx, cy, cz } = solid;
+    const cyaw = Math.cos(rot.yaw), syaw = Math.sin(rot.yaw);
+    const cpit = Math.cos(rot.pitch), spit = Math.sin(rot.pitch);
+    for (const n of net.nodes) {
+      const dx = n.x - cx, dy = n.y - cy, dz = (z[n.id] || 0) - cz;
+      // yaw about the vertical axis (mixes x & z), then pitch about horizontal
+      const x1 = dx * cyaw + dz * syaw;
+      const z1 = -dx * syaw + dz * cyaw;
+      const y2 = dy * cpit - z1 * spit;
+      const z2 = dy * spit + z1 * cpit;   // +z2 = toward the camera
+      const s = FOCAL / Math.max(300, FOCAL - z2);
+      m[n.id] = { x: cx + x1 * s, y: cy + y2 * s, s, depth: z2 };
+    }
+    return m;
+  }, [net.nodes, solid, rot, view3d]);
+
+  const P = useCallback((n) => proj[n.id] || { x: n.x, y: n.y, s: 1, depth: 0 }, [proj]);
+
+  // Depth range → a fog factor so far nodes/edges recede and near ones pop.
+  const fog = useMemo(() => {
+    if (!view3d) return () => 1;
+    let lo = Infinity, hi = -Infinity;
+    for (const n of net.nodes) { const d = P(n).depth; if (d < lo) lo = d; if (d > hi) hi = d; }
+    if (!(hi - lo > 1)) return () => 1;
+    return (d) => 0.4 + 0.6 * ((d - lo) / (hi - lo));
+  }, [view3d, net.nodes, P]);
 
   const toWorld = useCallback((cx, cy) => {
     const r = svgRef.current.getBoundingClientRect();
@@ -50,24 +104,27 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
     const n = byId[id];
     const el = svgRef.current;
     if (!n || !el) return;
+    const p = P(n);
     const r = el.getBoundingClientRect();
     const k = clamp(view.k, 0.75, 1.3);
-    glideTo({ k, x: r.width / 2 - n.x * k, y: r.height / 2 - n.y * k });
-  }, [byId, view.k, glideTo]);
+    glideTo({ k, x: r.width / 2 - p.x * k, y: r.height / 2 - p.y * k });
+  }, [byId, view.k, glideTo, P]);
 
   const fit = useCallback(() => {
     const el = svgRef.current;
     if (!el || !net.nodes.length) return;
     const r = el.getBoundingClientRect();
-    const xs = net.nodes.map((n) => n.x), ys = net.nodes.map((n) => n.y);
+    const xs = net.nodes.map((n) => P(n).x), ys = net.nodes.map((n) => P(n).y);
     const pad = 120;
     const w = Math.max(1, Math.max(...xs) - Math.min(...xs) + pad * 2);
     const h = Math.max(1, Math.max(...ys) - Math.min(...ys) + pad * 2);
     const k = clamp(Math.min(r.width / w, r.height / h), 0.2, 1.6);
     glideTo({ k, x: r.width / 2 - ((Math.min(...xs) + Math.max(...xs)) / 2) * k, y: r.height / 2 - ((Math.min(...ys) + Math.max(...ys)) / 2) * k });
-  }, [net.nodes, glideTo]);
+  }, [net.nodes, glideTo, P]);
 
   useEffect(() => { const t = setTimeout(fit, 60); return () => clearTimeout(t); /* eslint-disable-next-line */ }, [net.id]);
+  // Reframe when flipping between flat and tilted so the figure stays centred.
+  useEffect(() => { const t = setTimeout(fit, 30); return () => clearTimeout(t); /* eslint-disable-next-line */ }, [view3d]);
   useEffect(() => {
     if (centerOnSelect && selected?.kind === "node") centerNode(selected.id);
     /* eslint-disable-next-line */
@@ -91,12 +148,21 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
+  // Hit-test against projected centres, allowing for perspective-scaled radius.
   const nodeAt = (wx, wy) =>
-    net.nodes.filter((n) => !hidden.has(n.id)).find((n) => Math.hypot(n.x - wx, n.y - wy) <= radiusOf(n) + 6);
+    net.nodes.filter((n) => !hidden.has(n.id)).find((n) => {
+      const p = P(n);
+      return Math.hypot(p.x - wx, p.y - wy) <= radiusOf(n) * p.s + 6;
+    });
 
   const onPointerDown = (ev) => {
     if (ev.button !== 0) return;
-    drag.current = { mode: "pan", sx: ev.clientX, sy: ev.clientY, ox: view.x, oy: view.y, moved: false };
+    // In 3D a plain drag orbits the figure; Shift-drag pans. In 2D it always pans.
+    if (view3d && !ev.shiftKey) {
+      drag.current = { mode: "orbit", sx: ev.clientX, sy: ev.clientY, yaw: rot.yaw, pitch: rot.pitch, moved: false };
+    } else {
+      drag.current = { mode: "pan", sx: ev.clientX, sy: ev.clientY, ox: view.x, oy: view.y, moved: false };
+    }
     svgRef.current.setPointerCapture(ev.pointerId);
   };
 
@@ -104,6 +170,8 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
     ev.stopPropagation();
     setSelected({ kind: "node", id: n.id });
     if (readOnly) return;
+    // Repositioning happens on the flat plane; in 3D a node press just selects.
+    if (view3d) return;
     const w = toWorld(ev.clientX, ev.clientY);
     drag.current = { mode: "node", id: n.id, dx: n.x - w.x, dy: n.y - w.y, moved: false };
     svgRef.current.setPointerCapture(ev.pointerId);
@@ -122,7 +190,11 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
     const d = drag.current;
     if (!d) return;
     d.moved = true;
-    if (d.mode === "pan") {
+    if (d.mode === "orbit") {
+      const yaw = d.yaw + (ev.clientX - d.sx) * 0.006;
+      const pitch = clamp(d.pitch - (ev.clientY - d.sy) * 0.006, -1.35, 1.35);
+      setRot({ yaw, pitch });
+    } else if (d.mode === "pan") {
       setView((v) => ({ ...v, x: d.ox + (ev.clientX - d.sx), y: d.oy + (ev.clientY - d.sy) }));
     } else if (d.mode === "node") {
       const w = toWorld(ev.clientX, ev.clientY);
@@ -147,21 +219,28 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
         if (target.id !== d.from && !net.edges.some((e) => e.source === d.from && e.target === target.id)) {
           onChange({ ...net, edges: [...net.edges, { id: uid("e"), source: d.from, target: target.id, label: "", directed: true }] });
         }
-      } else if (src && Math.hypot(w.x - src.x, w.y - src.y) > radiusOf(src) + 24) {
-        // dropped on empty canvas (and dragged a real distance) → create a new
-        // node there, already connected from the source
-        const id = uid();
-        const typeId = activeTypeId && typeById[activeTypeId] ? activeTypeId : src.typeId || net.nodeTypes[0].id;
-        onChange({
-          ...net,
-          nodes: [...net.nodes, { id, label: "New node", typeId, notes: "", x: Math.round(w.x), y: Math.round(w.y), collapsed: false }],
-          edges: [...net.edges, { id: uid("e"), source: d.from, target: id, label: "", directed: true }],
-        });
-        setSelected({ kind: "node", id });
+      } else if (src) {
+        const sp = P(src);
+        // connected node. In 3D we offset from the source in the flat plane so
+        // its placement stays predictable; in 2D it lands under the cursor.
+        if (Math.hypot(w.x - sp.x, w.y - sp.y) > radiusOf(src) * sp.s + 24) {
+          const id = uid();
+          const typeId = activeTypeId && typeById[activeTypeId] ? activeTypeId : src.typeId || net.nodeTypes[0].id;
+          const pos = view3d
+            ? { x: Math.round(src.x + 150), y: Math.round(src.y + 40) }
+            : { x: Math.round(w.x), y: Math.round(w.y) };
+          onChange({
+            ...net,
+            nodes: [...net.nodes, { id, label: "New node", typeId, notes: "", ...pos, collapsed: false }],
+            edges: [...net.edges, { id: uid("e"), source: d.from, target: id, label: "", directed: true }],
+          });
+          setSelected({ kind: "node", id });
+          onNodeCreate?.();
+        }
       }
       return;
     }
-    if (d.mode === "pan" && !d.moved) setSelected(null);
+    if ((d.mode === "pan" || d.mode === "orbit") && !d.moved) setSelected(null);
   };
 
   const onDoubleClick = (ev) => {
@@ -169,23 +248,41 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
     const w = toWorld(ev.clientX, ev.clientY);
     if (nodeAt(w.x, w.y)) return;
     const id = uid();
+    // In 3D the cursor→plane mapping isn't 1:1, so drop near the figure's centre.
+    const pos = view3d
+      ? { x: Math.round(solid.cx + (Math.random() - 0.5) * 120), y: Math.round(solid.cy + (Math.random() - 0.5) * 120) }
+      : { x: Math.round(w.x), y: Math.round(w.y) };
     onChange({
       ...net,
-      nodes: [...net.nodes, { id, label: "New node", typeId: activeTypeId || net.nodeTypes[0].id, notes: "", x: Math.round(w.x), y: Math.round(w.y), collapsed: false }],
+      nodes: [...net.nodes, { id, label: "New node", typeId: activeTypeId || net.nodeTypes[0].id, notes: "", ...pos, collapsed: false }],
     });
     setSelected({ kind: "node", id });
+    onNodeCreate?.();
   };
 
   const focus = selected?.kind === "node" ? selected.id : null;
   const lit = focus ? new Set([focus, ...(neighbors[focus] || [])]) : null;
   const dim = (id) => (lit && !lit.has(id) ? 0.16 : 1);
 
+  // Painter's order: far things first so near ones overlap them.
+  const drawEdges = useMemo(() => {
+    const es = net.edges.filter((e) => byId[e.source] && byId[e.target] && !hidden.has(e.source) && !hidden.has(e.target));
+    if (!view3d) return es;
+    return [...es].sort((a, b) => (P(byId[a.source]).depth + P(byId[a.target]).depth) - (P(byId[b.source]).depth + P(byId[b.target]).depth));
+  }, [net.edges, byId, hidden, view3d, P]);
+
+  const drawNodes = useMemo(() => {
+    const ns = net.nodes.filter((n) => !hidden.has(n.id));
+    if (!view3d) return ns;
+    return [...ns].sort((a, b) => P(a).depth - P(b).depth);
+  }, [net.nodes, hidden, view3d, P]);
+
   return (
     <div className="absolute inset-0 overflow-hidden">
       <svg
         ref={svgRef}
         className="w-full h-full touch-none"
-        style={{ cursor: "grab" }}
+        style={{ cursor: view3d ? "move" : "grab" }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -202,18 +299,20 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
         </defs>
 
         <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
-          {net.edges.map((e) => {
+          {drawEdges.map((e) => {
             const a = byId[e.source], b = byId[e.target];
-            if (!a || !b || hidden.has(a.id) || hidden.has(b.id)) return null;
+            const pa = P(a), pb = P(b);
             const on = lit ? lit.has(a.id) && lit.has(b.id) : false;
             const sel = selected?.kind === "edge" && selected.id === e.id;
-            const ang = Math.atan2(b.y - a.y, b.x - a.x);
-            const ra = radiusOf(a) + 4, rb = radiusOf(b) + 10;
-            const x1 = a.x + Math.cos(ang) * ra, y1 = a.y + Math.sin(ang) * ra;
-            const x2 = b.x - Math.cos(ang) * rb, y2 = b.y - Math.sin(ang) * rb;
+            const ang = Math.atan2(pb.y - pa.y, pb.x - pa.x);
+            const ra = radiusOf(a) * pa.s + 4, rb = radiusOf(b) * pb.s + 10;
+            const x1 = pa.x + Math.cos(ang) * ra, y1 = pa.y + Math.sin(ang) * ra;
+            const x2 = pb.x - Math.cos(ang) * rb, y2 = pb.y - Math.sin(ang) * rb;
             const bright = on || sel;
+            const f = fog((pa.depth + pb.depth) / 2);
+            const base = lit ? (on ? 1 : 0.1) : 0.85;
             return (
-              <g key={e.id} style={{ opacity: lit ? (on ? 1 : 0.1) : 0.85, transition: "opacity 320ms ease" }}>
+              <g key={e.id} style={{ opacity: base * (bright ? 1 : f), transition: "opacity 320ms ease" }}>
                 <line
                   x1={x1} y1={y1} x2={x2} y2={y2}
                   stroke={bright ? "#00f0ff" : "#2f4a57"}
@@ -235,23 +334,24 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
           })}
 
           {live && byId[live.from] && (
-            <line x1={byId[live.from].x} y1={byId[live.from].y} x2={live.x} y2={live.y}
+            <line x1={P(byId[live.from]).x} y1={P(byId[live.from]).y} x2={live.x} y2={live.y}
               stroke="#00f0ff" strokeWidth="1.6" strokeDasharray="5 5" opacity="0.8" />
           )}
 
-          {net.nodes.map((n) => {
-            if (hidden.has(n.id)) return null;
+          {drawNodes.map((n) => {
             const t = typeOf(n);
             const isSel = focus === n.id;
             const r = radiusOf(n);
+            const p = P(n);
             const kidCount = (children[n.id] || []).filter((c) => byId[c]).length;
             const fs = 10;
             const lh = fs * 1.18;
             const lines = wrapLabel(n.label, lineChars(t.size), 2);
             const y0 = -((lines.length - 1) / 2) * lh;
+            const f = fog(p.depth);
             return (
-              <g key={n.id} transform={`translate(${n.x},${n.y})`}
-                style={{ opacity: dim(n.id), transition: "opacity 340ms ease", cursor: "pointer" }}
+              <g key={n.id} transform={`translate(${p.x},${p.y}) scale(${p.s})`}
+                style={{ opacity: dim(n.id) * (isSel ? 1 : f), transition: "opacity 340ms ease", cursor: "pointer" }}
                 onPointerDown={(ev) => startNodeDrag(ev, n)}
                 onPointerEnter={() => setHover(n.id)}
                 onPointerLeave={() => setHover((h) => (h === n.id ? null : h))}>
@@ -299,10 +399,19 @@ export default function Canvas({ net, onChange, readOnly, selected, setSelected,
       </svg>
 
       <div className="absolute bottom-3 right-3 flex gap-1.5">
+        <CanvasBtn active={view3d} onClick={() => setView3d((v) => !v)}
+          title={view3d ? "Switch to the flat 2D view" : "Tilt into the 3D view"}>{view3d ? "3D" : "2D"}</CanvasBtn>
         <CanvasBtn onClick={fit}>fit</CanvasBtn>
         <CanvasBtn onClick={() => glideTo({ ...view, k: clamp(view.k * 1.25, 0.2, 3) })}>+</CanvasBtn>
         <CanvasBtn onClick={() => glideTo({ ...view, k: clamp(view.k / 1.25, 0.2, 3) })}>–</CanvasBtn>
       </div>
+
+      {view3d && (
+        <div className="absolute bottom-3 left-3 text-[9px] pointer-events-none"
+          style={{ fontFamily: MONO, color: "#3f5f6c" }}>
+          drag to orbit · shift-drag to pan · switch to 2D to move nodes
+        </div>
+      )}
     </div>
   );
 }
@@ -338,6 +447,47 @@ function polyPoints(sides, R) {
     pts.push(`${(R * Math.cos(a)).toFixed(1)},${(R * Math.sin(a)).toFixed(1)}`);
   }
   return pts.join(" ");
+}
+
+/* ------------------------------------------------------------------- depth
+   A stable per-node z synthesised from the graph. BFS layers out from the
+   highest-degree node of each component give a tiered "bowl", and a hashed
+   jitter keeps same-layer siblings off one perfectly flat plane so their
+   edges separate in depth. Pure function of the graph — never persisted. */
+function graphDepths(net) {
+  const adj = {};
+  net.nodes.forEach((n) => (adj[n.id] = []));
+  net.edges.forEach((e) => {
+    if (adj[e.source] && adj[e.target]) { adj[e.source].push(e.target); adj[e.target].push(e.source); }
+  });
+  const layer = {};
+  const seen = new Set();
+  const seeds = [...net.nodes].sort((a, b) => adj[b.id].length - adj[a.id].length);
+  for (const seed of seeds) {
+    if (seen.has(seed.id)) continue;
+    layer[seed.id] = 0; seen.add(seed.id);
+    let q = [seed.id];
+    while (q.length) {
+      const cur = q.shift();
+      for (const nb of adj[cur]) if (!seen.has(nb)) { seen.add(nb); layer[nb] = layer[cur] + 1; q.push(nb); }
+    }
+  }
+  const maxL = Math.max(0, ...Object.values(layer));
+  const SPACING = 150;
+  const z = {};
+  for (const n of net.nodes) {
+    const L = layer[n.id] ?? 0;
+    const j = (hash01(n.id) - 0.5) * SPACING * 0.55; // ± keeps siblings non-coplanar
+    z[n.id] = (L - maxL / 2) * SPACING + j;
+  }
+  return z;
+}
+
+// Deterministic 0..1 hash of a string, so a node's jitter is stable across renders.
+function hash01(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return ((h >>> 0) % 100000) / 100000;
 }
 
 /* ---------------------------------------------------------------- label wrap
@@ -387,10 +537,10 @@ function nodeRadius(label, t) {
   return Math.max(t.size, textR);
 }
 
-const CanvasBtn = ({ children, onClick }) => (
-  <button onClick={onClick}
+const CanvasBtn = ({ children, onClick, active, title }) => (
+  <button onClick={onClick} title={title}
     className="w-8 h-8 rounded border text-xs"
-    style={{ fontFamily: MONO, background: "rgba(8,14,20,.8)", borderColor: "rgba(0,240,255,.25)", color: "#7fd4e2" }}>
+    style={{ fontFamily: MONO, background: active ? "rgba(0,240,255,.14)" : "rgba(8,14,20,.8)", borderColor: active ? "rgba(0,240,255,.6)" : "rgba(0,240,255,.25)", color: active ? "#aef4ff" : "#7fd4e2" }}>
     {children}
   </button>
 );
