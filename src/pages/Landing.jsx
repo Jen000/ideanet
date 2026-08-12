@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { api } from "../api";
-import { Shell, Btn, Tag, panel, inputStyle } from "../ui";
+import { Shell, Btn, Tag, panel, inputStyle, Spinner } from "../ui";
 import MiniPreview from "../MiniPreview";
 
 /* ================================================================= LANDING */
@@ -45,10 +45,17 @@ function AmbientField() {
 
 export default function Landing({ user, onSignIn, onDashboard, onOpen }) {
   const [gallery, setGallery] = useState([]);
+  const [loaded, setLoaded] = useState(false);
   const [q, setQ] = useState("");
   const [tag, setTag] = useState(null);
 
-  useEffect(() => { api.ensureSeed().then(() => api.gallery().then(setGallery)); }, []);
+  useEffect(() => {
+    api.ensureSeed()
+      .then(() => api.gallery())
+      .then((g) => setGallery(g || []))
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
 
   const tags = useMemo(() => {
     const c = {};
@@ -131,7 +138,12 @@ export default function Landing({ user, onSignIn, onDashboard, onOpen }) {
           </div>
         )}
 
-        {shown.length === 0 ? (
+        {!loaded ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-16">
+            <Spinner />
+            <div className="text-[10px] tracking-widest" style={{ color: "#5f8492" }}>LOADING NETWORKS</div>
+          </div>
+        ) : shown.length === 0 ? (
           <div className="p-8 rounded text-center text-xs" style={{ ...panel, color: "#5f8492" }}>
             Nothing matches that yet. Try a different word, or clear the tag filter.
           </div>
