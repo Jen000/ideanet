@@ -6,7 +6,7 @@ import { Shell, Btn, Tag, panel, inputCls, inputStyle, Spinner } from "../ui";
 import Canvas from "../Canvas";
 
 /* ================================================================== EDITOR */
-export default function Editor({ netId, user, onExit, readOnly, publicNet, onLike, liked, onStar, starred }) {
+export default function Editor({ netId, user, onExit, readOnly, publicNet, onLike, liked, onStar, starred, onEdit }) {
   const [net, setNet] = useState(publicNet || null);
   const [role, setRole] = useState(publicNet ? "viewer" : null);
   const [notFound, setNotFound] = useState(false);
@@ -165,11 +165,16 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-xs truncate" style={{ color: "#dff6fb" }}>{net.title}</span>
               <span className="text-[10px]" style={{ color: "#4f7280" }}>by {net.ownerName}</span>
-              {!readOnly && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ color: "#7fd4e2", border: "1px solid rgba(0,240,255,.25)" }}>view only</span>}
+              {net.visibility === "open" && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ color: "#39ff88", border: "1px solid rgba(57,255,136,.35)" }}>open · anyone can edit</span>}
+              {!readOnly && net.visibility !== "open" && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ color: "#7fd4e2", border: "1px solid rgba(0,240,255,.25)" }}>view only</span>}
+              {readOnly && net.visibility === "open" && onEdit && <Btn tone="primary" onClick={onEdit}>✎ edit</Btn>}
             </div>
           ) : (
-            <input value={net.title} onChange={(e) => setNet({ ...net, title: e.target.value })}
-              className="px-2 py-1 rounded text-xs flex-1 min-w-[140px] max-w-xs" style={{ ...inputStyle, border: "1px solid transparent" }} />
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <input value={net.title} onChange={(e) => setNet({ ...net, title: e.target.value })}
+                className="px-2 py-1 rounded text-xs flex-1 min-w-[140px] max-w-xs" style={{ ...inputStyle, border: "1px solid transparent" }} />
+              {net.visibility === "open" && role !== "owner" && <span className="text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap" style={{ color: "#39ff88", border: "1px solid rgba(57,255,136,.35)" }}>open · anyone can edit</span>}
+            </div>
           )}
           <div className="flex-1" />
           <Btn tone={showComments ? "primary" : "ghost"} onClick={() => setShowComments((v) => !v)}>💬{comments.length ? ` ${comments.length}` : ""}</Btn>
@@ -324,13 +329,22 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
                       <div className="flex gap-2 mb-2">
                         <Btn tone={net.visibility === "private" ? "primary" : "ghost"} onClick={async () => { setNet({ ...net, visibility: "private" }); await api.unpublish(net.id); }}>private</Btn>
                         <Btn tone={net.visibility === "public" ? "primary" : "ghost"} onClick={() => setNet({ ...net, visibility: "public" })}>public</Btn>
+                        <Btn tone={net.visibility === "open" ? "primary" : "ghost"} onClick={() => setNet({ ...net, visibility: "open" })}>open</Btn>
                       </div>
                       <p className="text-[9px] leading-relaxed mb-3" style={{ color: "#456773" }}>
                         {net.visibility === "public"
-                          ? "Listed in the public gallery. Anyone can open and read it."
+                          ? "Listed in the public gallery. Anyone can open, read, and comment."
+                          : net.visibility === "open"
+                          ? "Listed in the gallery, and anyone signed in can open, comment, and edit it — no invite needed."
                           : "Private — only you and people you share it with can see it."}
                       </p>
 
+                      {net.visibility === "open" ? (
+                        <p className="text-[9px] leading-relaxed mb-1.5 pt-3" style={{ color: "#456773", borderTop: "1px solid rgba(0,240,255,.1)" }}>
+                          Anyone signed in can already edit this — no need to add people.
+                        </p>
+                      ) : (
+                       <>
                       <div className="text-[10px] mb-1.5 pt-3" style={{ color: "#5f8492", borderTop: "1px solid rgba(0,240,255,.1)" }}>
                         {net.visibility === "public" ? "ADD EDITORS" : "SHARE"}
                       </div>
@@ -352,6 +366,8 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
                           ? "It's already visible to everyone — add people here to let them edit it."
                           : "Add people by email as a viewer (read-only) or editor."}
                       </p>
+                      </>
+                      )}
                       {shareErr && <div className="text-[9px] mb-2" style={{ color: "#ff90b0" }}>{shareErr}</div>}
                       {collabs.length > 0 && (
                         <div className="flex flex-col gap-1 mb-2">

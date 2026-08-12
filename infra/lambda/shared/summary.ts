@@ -13,6 +13,7 @@ export const summarize = (n: Network): Summary => ({
   author: n.ownerName,
   likes: n.likes || 0,
   views: n.views || 0,
+  visibility: n.visibility,
   nodeCount: n.nodes.length,
   updatedAt: n.updatedAt,
   preview: {

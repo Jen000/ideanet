@@ -81,6 +81,7 @@ export default function App() {
     return <Editor netId={publicNet.id} readOnly publicNet={publicNet} user={user}
       liked={liked.includes(publicNet.id)} onLike={like}
       starred={starred.includes(publicNet.id)} onStar={user ? star : null}
+      onEdit={publicNet.visibility === "open" && user ? () => navigate(`/net/${publicNet.id}`) : null}
       onExit={() => navigate("/")} />;
   }
 
