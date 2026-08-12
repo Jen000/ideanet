@@ -156,10 +156,15 @@ export const api = {
     // Reflect the gallery's live view count so the editor matches the public copy.
     const idx = (await store.get("pubindex", true)) || {};
     const withViews = (net) => (net && idx[net.id] ? { ...net, views: idx[net.id].views ?? net.views ?? 0 } : net);
-    if (all[id] && all[id].ownerId === me) return { net: withViews(all[id]), role: "owner" };
+    const mirror = await store.get(`mirror:${id}`, true);
+    if (all[id] && all[id].ownerId === me) {
+      // The mirror is the shared canonical (matches the single DynamoDB item): an
+      // editor's change to an open net lives there, so prefer it when it's newer.
+      const canonical = mirror && (mirror.updatedAt || 0) >= (all[id].updatedAt || 0) ? mirror : all[id];
+      return { net: withViews(canonical), role: "owner" };
+    }
     const shares = (await store.get(`shares:${id}`, true)) || [];
     const mine = shares.find((c) => c.userId === me);
-    const mirror = await store.get(`mirror:${id}`, true);
     if (mine && mirror) return { net: withViews(mirror), role: mine.role };
     // Open tier: any signed-in user may edit a network marked "open".
     if (me && mirror && mirror.visibility === "open") return { net: withViews(mirror), role: "editor" };
@@ -170,7 +175,9 @@ export const api = {
     validateNetwork(net);
     const s = await store.get("session");
     const me = s?.userId;
-    const stamped = { ...net, ownerId: net.ownerId || me, updatedAt: now() };
+    const prev = await store.get(`mirror:${net.id}`, true); // state we're about to replace
+    const meName = await myName(s);
+    const stamped = { ...net, ownerId: net.ownerId || me, lastEditorId: me, lastEditorName: meName, updatedAt: now() };
     // Owner keeps it in their own list; an editor only updates the shared copy.
     if (stamped.ownerId === me) {
       const all = (await store.get("mynets")) || {};
@@ -186,7 +193,37 @@ export const api = {
     } else {
       await api.unpublish(net.id);
     }
+    // Keep a revertible trail for open networks. Always snapshot on a handoff to
+    // a different editor; throttle rapid saves by the same person.
+    if (prev && prev.visibility === "open")
+      await snapshotLocal(net.id, prev, prev.lastEditorName || prev.ownerName || "someone", prev.lastEditorId || "", prev.lastEditorId !== me);
     return stamped;
+  },
+  async history(id) {
+    const list = (await store.get(`hist:${id}`, true)) || [];
+    return list.map((h) => ({ id: h.id, at: h.at, by: h.by, nodeCount: (h.net.nodes || []).length }));
+  },
+  async revert(id, snapshotId) {
+    const s = await store.get("session");
+    const me = s?.userId;
+    const all = (await store.get("mynets")) || {};
+    if (!(all[id] && all[id].ownerId === me)) throw new Error("Only the owner can revert this network.");
+    const list = (await store.get(`hist:${id}`, true)) || [];
+    const snap = list.find((h) => h.id === snapshotId);
+    if (!snap) throw new Error("That version no longer exists.");
+    const cur = (await store.get(`mirror:${id}`, true)) || all[id];
+    if (cur) await snapshotLocal(id, cur, await myName(s), me, true); // force: make the revert undoable
+    const restored = { ...snap.net, id, ownerId: cur?.ownerId ?? me, ownerName: cur?.ownerName, collaborators: cur?.collaborators || [], visibility: cur?.visibility, likes: cur?.likes || 0, views: cur?.views || 0, createdAt: cur?.createdAt, updatedAt: now() };
+    all[id] = restored;
+    await store.set("mynets", all);
+    await store.set(`mirror:${id}`, restored, true);
+    if (restored.visibility === "public" || restored.visibility === "open") {
+      await store.set(`pub:${id}`, restored, true);
+      const idx = (await store.get("pubindex", true)) || {};
+      idx[id] = { ...summarize(restored), likes: idx[id]?.likes ?? 0, views: idx[id]?.views ?? 0 };
+      await store.set("pubindex", idx, true);
+    }
+    return { net: restored, role: "owner" };
   },
   async unpublish(id) {
     const idx = (await store.get("pubindex", true)) || {};
@@ -205,6 +242,7 @@ export const api = {
       await store.set(`member:${c.userId}`, mem, true);
     }
     await store.set(`shares:${id}`, [], true);
+    await store.set(`hist:${id}`, [], true);
   },
 
   /* ------------------------------------------------------- sharing & roles */
@@ -340,6 +378,22 @@ export const api = {
 };
 
 const publicUser = (u) => ({ id: u.id, name: u.name, email: u.email });
+
+// Display name for the current session, for tagging history snapshots.
+async function myName(session) {
+  const accounts = (await store.get("accounts")) || {};
+  return accounts[session?.email]?.name || "someone";
+}
+
+// Push a bounded, throttled edit snapshot (newest first) for a network.
+async function snapshotLocal(id, net, by, byId, force = false) {
+  const key = `hist:${id}`;
+  const list = (await store.get(key, true)) || [];
+  const lastAt = list.length ? list[0].at : 0;
+  if (!force && Date.now() - lastAt < 30000) return;
+  list.unshift({ id: uid("h"), at: Date.now(), by, byId, net });
+  await store.set(key, list.slice(0, 20), true);
+}
 export const summarize = (n) => ({
   id: n.id, title: n.title, description: n.description, tags: n.tags,
   author: n.ownerName, likes: n.likes || 0, views: n.views || 0, visibility: n.visibility,

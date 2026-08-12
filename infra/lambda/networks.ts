@@ -6,6 +6,7 @@ import { caller, body, json, handle, HttpError } from "./shared/http.js";
 import { getPublic, putPublicCopy, deletePublicCopy } from "./shared/public.js";
 import { resolveAccess, canWrite } from "./shared/access.js";
 import { validateNetwork, LIMITS } from "./shared/validate.js";
+import { snapshotNet, listHistory, getSnapshot, deleteHistory } from "./shared/history.js";
 import { lookupByEmail, upsertDirectory } from "./shared/directory.js";
 import { summarize } from "./shared/summary.js";
 import type { Network, Collaborator } from "./shared/types.js";
@@ -76,6 +77,8 @@ async function save(event: APIGatewayProxyEventV2WithJWTAuthorizer) {
     updatedAt: now(),
     likes: access ? access.net.likes || 0 : 0,
     views: access ? access.net.views || 0 : 0,
+    lastEditorId: me.id, // server-set (not spoofable): powers open-net history
+    lastEditorName: me.name,
   };
 
   // Stale-edit guard: reject if the stored copy moved since the client loaded it.
@@ -107,6 +110,16 @@ async function save(event: APIGatewayProxyEventV2WithJWTAuthorizer) {
   } else {
     await deletePublicCopy(id);
   }
+
+  // "Open" networks are editable by anyone, so keep a bounded, revertible trail.
+  // Snapshot the version we just replaced, tagged with who authored it. Always
+  // snapshot when a *different* person takes over (a handoff); throttle rapid
+  // saves by the same person.
+  if (!isCreate && access && access.net.visibility === "open") {
+    const prevEditorId = access.net.lastEditorId;
+    const prevEditorName = access.net.lastEditorName || access.net.ownerName || "someone";
+    await snapshotNet(id, access.net, prevEditorName, prevEditorId || "", prevEditorId !== me.id);
+  }
   return json(200, net);
 }
 
@@ -124,10 +137,56 @@ async function remove(event: APIGatewayProxyEventV2WithJWTAuthorizer) {
 
   await ddb.send(new DeleteCommand({ TableName: TABLE, Key: { PK: userPk(me.id), SK: netSk(id) } }));
   await deletePublicCopy(id);
+  await deleteHistory(id);
   for (const c of access.net.collaborators || []) {
     await ddb.send(new DeleteCommand({ TableName: TABLE, Key: { PK: userPk(c.userId), SK: shareSk(id) } }));
   }
   return json(200, {});
+}
+
+// GET /networks/{id}/history — owner-only list of recent edit snapshots.
+async function history(event: APIGatewayProxyEventV2WithJWTAuthorizer) {
+  const me = caller(event);
+  const id = pathId(event);
+  const access = await resolveAccess(me.id, id);
+  if (!access) throw new HttpError(404, "Not found.");
+  if (access.role !== "owner") throw new HttpError(403, "Only the owner can see edit history.");
+  return json(200, await listHistory(id));
+}
+
+// POST /networks/{id}/revert { snapshotId } — owner restores a prior version.
+async function revert(event: APIGatewayProxyEventV2WithJWTAuthorizer) {
+  const me = caller(event);
+  const id = pathId(event);
+  const { snapshotId } = body<{ snapshotId: string }>(event);
+  if (!snapshotId) throw new HttpError(400, "Missing snapshot id.");
+  const access = await resolveAccess(me.id, id);
+  if (!access) throw new HttpError(404, "Not found.");
+  if (access.role !== "owner") throw new HttpError(403, "Only the owner can revert this network.");
+  const snap = await getSnapshot(id, snapshotId);
+  if (!snap) throw new HttpError(404, "That version no longer exists.");
+
+  // Snapshot the current state first (force past the throttle) so the revert
+  // itself can be undone, then restore — keeping server-owned fields intact.
+  await snapshotNet(id, access.net, me.name, me.id, true);
+  const restored: Network = {
+    ...snap.net,
+    id,
+    ownerId: access.ownerId,
+    ownerName: access.net.ownerName,
+    collaborators: access.net.collaborators || [],
+    visibility: access.net.visibility,
+    likes: access.net.likes || 0,
+    views: access.net.views || 0,
+    createdAt: access.net.createdAt,
+    updatedAt: now(),
+  };
+  await ddb.send(new PutCommand({ TableName: TABLE, Item: { PK: userPk(access.ownerId), SK: netSk(id), net: restored } }));
+  if (restored.visibility === "public" || restored.visibility === "open") {
+    const existing = await getPublic(id);
+    await putPublicCopy(restored, existing?.likes ?? 0, existing?.views ?? 0, existing?.comments ?? 0);
+  }
+  return json(200, { net: restored, role: "owner" });
 }
 
 // POST /networks/{id}/unpublish — owner only.
@@ -267,6 +326,8 @@ export const handler = handle<APIGatewayProxyEventV2WithJWTAuthorizer>(async (ev
     case "GET /networks/{id}": return open(event);
     case "PUT /networks/{id}": return save(event);
     case "DELETE /networks/{id}": return remove(event);
+    case "GET /networks/{id}/history": return history(event);
+    case "POST /networks/{id}/revert": return revert(event);
     case "POST /networks/{id}/unpublish": return unpublish(event);
     case "GET /networks/{id}/collaborators": return listCollaborators(event);
     case "POST /networks/{id}/collaborators": return addCollaborator(event);

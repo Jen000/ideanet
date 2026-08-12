@@ -18,3 +18,8 @@ export const DIRECTORY_SK = "USER";
 // Comments on a network, sorted oldest-first by a zero-padded timestamp.
 export const commentsPk = (netId: string) => `COMMENTS#${netId}`;
 export const commentSk = (createdAt: number, id: string) => `${String(createdAt).padStart(15, "0")}#${id}`;
+
+// Edit-history snapshots for a network (owner revert), newest-first when read
+// with ScanIndexForward:false. A bounded ring — only the most recent are kept.
+export const histPk = (netId: string) => `HIST#${netId}`;
+export const histSk = (at: number, id: string) => `${String(at).padStart(15, "0")}#${id}`;

@@ -25,6 +25,7 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState("");
   const [collabs, setCollabs] = useState([]);
+  const [edits, setEdits] = useState([]); // recent edit snapshots (owner, open nets)
   const [shareEmail, setShareEmail] = useState("");
   const [shareRole, setShareRole] = useState("viewer");
   const [shareErr, setShareErr] = useState("");
@@ -66,6 +67,13 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
     if (role === "owner" && net) api.collaborators(net.id).then(setCollabs).catch(() => {});
     /* eslint-disable-next-line */
   }, [role, net?.id]);
+
+  // Owner of an open network: recent edit snapshots, to roll back a bad edit.
+  const loadHistory = () => {
+    if (role === "owner" && net?.visibility === "open") api.history?.(net.id).then(setEdits).catch(() => {});
+    else setEdits([]);
+  };
+  useEffect(loadHistory, [role, net?.id, net?.visibility]); // eslint-disable-line
 
   useEffect(() => {
     const onKey = (e) => {
@@ -134,6 +142,15 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
   const doUnshare = async (userId) => {
     await api.unshareNetwork(net.id, userId);
     setCollabs((cs) => cs.filter((x) => x.userId !== userId));
+  };
+  const doRevert = async (snapshotId) => {
+    try {
+      const r = await api.revert(net.id, snapshotId);
+      first.current = true; // don't let the restored state trigger another autosave
+      baseUpdatedAt.current = r.net.updatedAt;
+      setNet(r.net); setSelected(null); setSaved("saved");
+      api.history?.(net.id).then(setEdits).catch(() => {});
+    } catch (e) { setShareErr(e.message); }
   };
 
   if (notFound) return <Shell><div className="min-h-screen flex items-center justify-center text-xs text-center px-6" style={{ color: "#5f8492" }}>This network doesn't exist, or it isn't shared with you.<br /><button onClick={onExit} className="mt-3" style={{ color: "#00f0ff" }}>← back</button></div></Shell>;
@@ -382,6 +399,24 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
                               <button onClick={() => doUnshare(c.userId)} title="Remove" style={{ color: "#ff6b8a" }}>×</button>
                             </div>
                           ))}
+                        </div>
+                      )}
+
+                      {net.visibility === "open" && edits.length > 0 && (
+                        <div className="mt-2 pt-3" style={{ borderTop: "1px solid rgba(0,240,255,.1)" }}>
+                          <div className="text-[10px] mb-1.5" style={{ color: "#5f8492" }}>RECENT EDITS</div>
+                          <p className="text-[9px] leading-relaxed mb-1.5" style={{ color: "#456773" }}>
+                            Anyone can edit an open network. Roll back to a version from before an edit if you need to.
+                          </p>
+                          <div className="flex flex-col gap-1">
+                            {edits.map((h) => (
+                              <div key={h.id} className="flex items-center gap-1.5 text-[10px]">
+                                <span className="truncate flex-1" style={{ color: "#b6dbe4" }}>before {h.by}'s edit · {timeAgo(h.at)}</span>
+                                <span style={{ color: "#456773" }}>{h.nodeCount}n</span>
+                                <button onClick={() => doRevert(h.id)} title="Restore this version" style={{ color: "#00f0ff" }}>revert</button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </>

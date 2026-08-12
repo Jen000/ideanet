@@ -27,6 +27,8 @@ export interface Network {
   createdAt: number;
   updatedAt: number;
   collaborators?: Collaborator[]; // private sharing; absent = not shared
+  lastEditorId?: string; // who last saved (server-set); drives open-net history
+  lastEditorName?: string;
 }
 
 export interface Summary {
