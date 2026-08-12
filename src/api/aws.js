@@ -164,6 +164,19 @@ export const api = {
     await call(`/networks/${encodeURIComponent(id)}/collaborators/${encodeURIComponent(userId)}`, { method: "DELETE" });
   },
 
+  /* -------------------------------------------------------------- comments */
+  async comments(id) {
+    const jwt = await idToken();
+    if (!jwt) return []; // v1: comments are visible to signed-in viewers
+    try { return await call(`/networks/${encodeURIComponent(id)}/comments`); } catch { return []; }
+  },
+  async addComment(id, text) {
+    return call(`/networks/${encodeURIComponent(id)}/comments`, { method: "POST", body: { text } });
+  },
+  async deleteComment(id, commentId) {
+    await call(`/networks/${encodeURIComponent(id)}/comments/${encodeURIComponent(commentId)}`, { method: "DELETE" });
+  },
+
   /* --------------------------------------------------------- public gallery */
   async gallery() {
     return call("/gallery", { auth: false });

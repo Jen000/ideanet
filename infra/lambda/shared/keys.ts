@@ -14,3 +14,7 @@ export const GSI_PUBLIC_PK = "VISIBILITY#public";
 // User directory: look up a user by email so networks can be shared by email.
 export const emailPk = (email: string) => `EMAIL#${email.trim().toLowerCase()}`;
 export const DIRECTORY_SK = "USER";
+
+// Comments on a network, sorted oldest-first by a zero-padded timestamp.
+export const commentsPk = (netId: string) => `COMMENTS#${netId}`;
+export const commentSk = (createdAt: number, id: string) => `${String(createdAt).padStart(15, "0")}#${id}`;

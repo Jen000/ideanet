@@ -4,6 +4,8 @@ export interface NodeType { id: string; name: string; color: string; size: numbe
 export interface GraphNode { id: string; label: string; typeId: string; notes: string; x: number; y: number; collapsed: boolean; }
 export interface Edge { id: string; source: string; target: string; label: string; directed: boolean; }
 
+export interface Comment { id: string; netId: string; authorId: string; authorName: string; text: string; createdAt: number; }
+
 export type Role = "owner" | "editor" | "viewer";
 
 export interface Collaborator { userId: string; email: string; name: string; role: "editor" | "viewer"; }

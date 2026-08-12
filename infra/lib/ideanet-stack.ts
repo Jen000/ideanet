@@ -140,12 +140,18 @@ export class IdeaNetStack extends cdk.Stack {
     viewsRollupFn.addEventSource(
       new SqsEventSource(viewQueue, { batchSize: 100, maxBatchingWindow: cdk.Duration.seconds(30) })
     );
+    const commentsFn = new NodejsFunction(this, "CommentsFn", {
+      ...common,
+      entry: path.join(__dirname, "..", "lambda", "comments.ts"),
+      handler: "handler",
+    });
 
     // Least-privilege data access.
     table.grantReadWriteData(networksFn);
     table.grantReadWriteData(likesFn);
     table.grantReadData(galleryFn);
     table.grantReadWriteData(viewsRollupFn);
+    table.grantReadWriteData(commentsFn);
     viewQueue.grantSendMessages(galleryFn);
 
     /* ------------------------------------------------------------- http api
@@ -169,6 +175,7 @@ export class IdeaNetStack extends cdk.Stack {
     const networksInt = new HttpLambdaIntegration("NetworksInt", networksFn);
     const galleryInt = new HttpLambdaIntegration("GalleryInt", galleryFn);
     const likesInt = new HttpLambdaIntegration("LikesInt", likesFn);
+    const commentsInt = new HttpLambdaIntegration("CommentsInt", commentsFn);
 
     // Owner-scoped (JWT required). Access within these is enforced per-role in
     // the handler (owner / editor / viewer).
@@ -179,6 +186,8 @@ export class IdeaNetStack extends cdk.Stack {
     api.addRoutes({ path: "/networks/{id}/collaborators/{userId}", methods: [apigw.HttpMethod.DELETE], integration: networksInt, authorizer });
     api.addRoutes({ path: "/shared", methods: [apigw.HttpMethod.GET], integration: networksInt, authorizer });
     api.addRoutes({ path: "/me", methods: [apigw.HttpMethod.POST], integration: networksInt, authorizer });
+    api.addRoutes({ path: "/networks/{id}/comments", methods: [apigw.HttpMethod.GET, apigw.HttpMethod.POST], integration: commentsInt, authorizer });
+    api.addRoutes({ path: "/networks/{id}/comments/{commentId}", methods: [apigw.HttpMethod.DELETE], integration: commentsInt, authorizer });
     api.addRoutes({ path: "/networks/{id}/like", methods: [apigw.HttpMethod.POST], integration: likesInt, authorizer });
     api.addRoutes({ path: "/likes", methods: [apigw.HttpMethod.GET], integration: likesInt, authorizer });
     api.addRoutes({ path: "/networks/{id}/star", methods: [apigw.HttpMethod.POST], integration: likesInt, authorizer });

@@ -78,7 +78,7 @@ export default function App() {
 
   if (route.name === "viewer") {
     if (!publicNet || publicNet.id !== route.id) return <Loading />;
-    return <Editor netId={publicNet.id} readOnly publicNet={publicNet}
+    return <Editor netId={publicNet.id} readOnly publicNet={publicNet} user={user}
       liked={liked.includes(publicNet.id)} onLike={like}
       starred={starred.includes(publicNet.id)} onStar={user ? star : null}
       onExit={() => navigate("/")} />;
