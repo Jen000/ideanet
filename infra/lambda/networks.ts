@@ -5,6 +5,7 @@ import { userPk, netSk, shareSk } from "./shared/keys.js";
 import { caller, body, json, handle, HttpError } from "./shared/http.js";
 import { getPublic, putPublicCopy, deletePublicCopy } from "./shared/public.js";
 import { resolveAccess, canWrite } from "./shared/access.js";
+import { validateNetwork, LIMITS } from "./shared/validate.js";
 import { lookupByEmail, upsertDirectory } from "./shared/directory.js";
 import { summarize } from "./shared/summary.js";
 import type { Network, Collaborator } from "./shared/types.js";
@@ -39,11 +40,26 @@ async function save(event: APIGatewayProxyEventV2WithJWTAuthorizer) {
   const me = caller(event);
   const id = pathId(event);
   const incoming = body<Network>(event);
+  validateNetwork(incoming);
   const access = await resolveAccess(me.id, id);
 
   if (access && !canWrite(access.role)) throw new HttpError(403, "You have view-only access to this network.");
 
   const isCreate = !access;
+
+  // Cap how many networks one account can own, as a floor against runaway
+  // automated creation (rate limiting and signup verification are the front line).
+  if (isCreate) {
+    const owned = await ddb.send(
+      new QueryCommand({
+        TableName: TABLE,
+        KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk)",
+        ExpressionAttributeValues: { ":pk": userPk(me.id), ":sk": "NET#" },
+        Select: "COUNT",
+      })
+    );
+    if ((owned.Count ?? 0) >= LIMITS.netsPerUser) throw new HttpError(400, "You've reached the maximum number of networks.");
+  }
   const ownerId = access ? access.ownerId : me.id;
   const iAmOwner = ownerId === me.id;
 

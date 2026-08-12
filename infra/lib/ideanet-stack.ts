@@ -172,6 +172,14 @@ export class IdeaNetStack extends cdk.Stack {
       },
     });
 
+    // Stage-level throttling: a floor so a single client can't flood the API
+    // (the AWS account default is ~10k rps). These are default route settings
+    // applied to the auto-created $default stage.
+    const defaultStage = api.defaultStage?.node.defaultChild as apigw.CfnStage | undefined;
+    if (defaultStage) {
+      defaultStage.defaultRouteSettings = { throttlingRateLimit: 30, throttlingBurstLimit: 60 };
+    }
+
     const networksInt = new HttpLambdaIntegration("NetworksInt", networksFn);
     const galleryInt = new HttpLambdaIntegration("GalleryInt", galleryFn);
     const likesInt = new HttpLambdaIntegration("LikesInt", likesFn);

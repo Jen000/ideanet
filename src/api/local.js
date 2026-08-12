@@ -1,4 +1,5 @@
 import { DEFAULT_TYPES, uid, now } from "../constants";
+import { validateNetwork } from "./limits";
 
 /* ---------------------------------------------------------------- persistence
    Demo store. Uses the artifact key/value store when present, in-memory
@@ -166,6 +167,7 @@ export const api = {
     return null;
   },
   async saveNetwork(net) {
+    validateNetwork(net);
     const s = await store.get("session");
     const me = s?.userId;
     const stamped = { ...net, ownerId: net.ownerId || me, updatedAt: now() };
