@@ -20,6 +20,7 @@ async function gallery() {
       KeyConditionExpression: "GSI1PK = :pk",
       ExpressionAttributeValues: { ":pk": GSI_PUBLIC_PK },
       ScanIndexForward: false, // GSI1SK is a zero-padded score; descending = most popular first
+      Limit: 200, // bounded response: the top-ranked networks, not the whole table
     })
   );
   const items = (r.Items ?? []).map((i) => {
