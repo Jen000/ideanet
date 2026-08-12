@@ -193,6 +193,14 @@ export const api = {
     await call(`/networks/${encodeURIComponent(id)}/unpublish`, { method: "POST" });
   },
 
+  /* ------------------------------------------------- edit history (open nets) */
+  async history(id) {
+    try { return await call(`/networks/${encodeURIComponent(id)}/history`); } catch { return []; }
+  },
+  async revert(id, snapshotId) {
+    return call(`/networks/${encodeURIComponent(id)}/revert`, { method: "POST", body: { snapshotId } });
+  },
+
   /* --------------------------------------------------------------- engagement */
   // Sign-in-gated: liking requires an account. When signed out this is a no-op
   // that reports the block, so the UI leaves the count and heart untouched
