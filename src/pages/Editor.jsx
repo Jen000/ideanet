@@ -180,6 +180,7 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
           <Btn tone={showComments ? "primary" : "ghost"} onClick={() => setShowComments((v) => !v)}>💬{comments.length ? ` ${comments.length}` : ""}</Btn>
           {readOnly ? (
             <div className="flex items-center gap-2">
+              <span className="text-[10px]" style={{ color: "#6f94a1" }} title="views">◉ {net.views || 0}</span>
               {onStar && <Btn tone={starred ? "primary" : "ghost"} onClick={onStar}>{starred ? "★ saved" : "☆ save"}</Btn>}
               <Btn tone={liked ? "primary" : "ghost"} onClick={onLike}>♥ {net.likes || 0}</Btn>
             </div>
@@ -189,6 +190,9 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
                 <button onClick={reload} className="text-[10px]" style={{ color: "#ff90b0" }} title="Someone else saved changes. Reload to get the latest, then reapply your edit.">edited elsewhere · reload</button>
               ) : (
                 <span className="text-[10px] hidden sm:inline" style={{ color: saved === "saved" ? "#39ff88" : saved === "error" ? "#ff90b0" : "#ffd166" }}>{saved === "error" ? "save failed" : saved}</span>
+              )}
+              {(net.visibility === "public" || net.visibility === "open") && (
+                <span className="text-[10px] hidden sm:inline" style={{ color: "#6f94a1" }} title="views on the public copy">◉ {net.views || 0}</span>
               )}
               {role === "editor" && <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ color: "#39ff88", border: "1px solid rgba(57,255,136,.3)" }}>shared · editor</span>}
               <Btn onClick={() => setNet(radialLayout(net))}>auto-arrange</Btn>

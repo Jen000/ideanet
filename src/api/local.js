@@ -152,14 +152,17 @@ export const api = {
     const s = await store.get("session");
     const me = s?.userId;
     const all = (await store.get("mynets")) || {};
-    if (all[id] && all[id].ownerId === me) return { net: all[id], role: "owner" };
+    // Reflect the gallery's live view count so the editor matches the public copy.
+    const idx = (await store.get("pubindex", true)) || {};
+    const withViews = (net) => (net && idx[net.id] ? { ...net, views: idx[net.id].views ?? net.views ?? 0 } : net);
+    if (all[id] && all[id].ownerId === me) return { net: withViews(all[id]), role: "owner" };
     const shares = (await store.get(`shares:${id}`, true)) || [];
     const mine = shares.find((c) => c.userId === me);
     const mirror = await store.get(`mirror:${id}`, true);
-    if (mine && mirror) return { net: mirror, role: mine.role };
+    if (mine && mirror) return { net: withViews(mirror), role: mine.role };
     // Open tier: any signed-in user may edit a network marked "open".
-    if (me && mirror && mirror.visibility === "open") return { net: mirror, role: "editor" };
-    if (all[id]) return { net: all[id], role: "owner" };
+    if (me && mirror && mirror.visibility === "open") return { net: withViews(mirror), role: "editor" };
+    if (all[id]) return { net: withViews(all[id]), role: "owner" };
     return null;
   },
   async saveNetwork(net) {
