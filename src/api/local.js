@@ -280,7 +280,15 @@ export const api = {
   },
   async gallery() {
     const idx = (await store.get("pubindex", true)) || {};
-    return Object.values(idx).sort((a, b) => score(b) - score(a));
+    const items = Object.values(idx).sort((a, b) => score(b) - score(a));
+    // Attach the live comment count so cards can show it (backend does this via
+    // a denormalised counter on the public copy).
+    const out = [];
+    for (const s of items) {
+      const cs = (await store.get(`comments:${s.id}`, true)) || [];
+      out.push({ ...s, comments: cs.length });
+    }
+    return out;
   },
   async openPublic(id) {
     const net = await store.get(`pub:${id}`, true);

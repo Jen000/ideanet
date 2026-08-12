@@ -37,6 +37,7 @@ export interface Summary {
   author: string;
   likes: number;
   views: number;
+  comments?: number;
   visibility?: "public" | "private" | "open";
   nodeCount: number;
   updatedAt: number;

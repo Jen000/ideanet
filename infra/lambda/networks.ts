@@ -87,7 +87,7 @@ async function save(event: APIGatewayProxyEventV2WithJWTAuthorizer) {
   // "open" additionally lets anyone signed in edit (enforced in resolveAccess).
   if (net.visibility === "public" || net.visibility === "open") {
     const existing = await getPublic(id);
-    await putPublicCopy(net, existing?.likes ?? 0, existing?.views ?? 0);
+    await putPublicCopy(net, existing?.likes ?? 0, existing?.views ?? 0, existing?.comments ?? 0);
   } else {
     await deletePublicCopy(id);
   }

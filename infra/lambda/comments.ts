@@ -5,7 +5,7 @@ import { ddb, TABLE } from "./shared/dynamo.js";
 import { commentsPk, commentSk } from "./shared/keys.js";
 import { caller, body, json, handle, HttpError } from "./shared/http.js";
 import { resolveAccess } from "./shared/access.js";
-import { getPublic } from "./shared/public.js";
+import { getPublic, bumpPublicComments } from "./shared/public.js";
 import type { Comment } from "./shared/types.js";
 
 const now = () => Date.now();
@@ -52,6 +52,7 @@ async function add(event: APIGatewayProxyEventV2WithJWTAuthorizer) {
 
   const comment: Comment = { id: randomUUID(), netId: id, authorId: me.id, authorName: me.name, text, createdAt: now() };
   await ddb.send(new PutCommand({ TableName: TABLE, Item: { PK: commentsPk(id), SK: commentSk(comment.createdAt, comment.id), ...comment } }));
+  await bumpPublicComments(id, 1);
   return json(200, comment);
 }
 
@@ -67,6 +68,7 @@ async function remove(event: APIGatewayProxyEventV2WithJWTAuthorizer) {
   if (!item) return json(200, {});
   if (item.authorId !== me.id && !isOwner) throw new HttpError(403, "You can only delete your own comments.");
   await ddb.send(new DeleteCommand({ TableName: TABLE, Key: { PK: item.PK, SK: item.SK } }));
+  await bumpPublicComments(id, -1);
   return json(200, {});
 }
 
