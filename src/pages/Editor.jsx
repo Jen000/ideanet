@@ -19,6 +19,8 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
   // Node-types legend is a big block on a phone; start collapsed on small screens.
   const [typesOpen, setTypesOpen] = useState(() => typeof window === "undefined" || window.innerWidth >= 640);
   const [showInspector, setShowInspector] = useState(true);
+  // Shared width for the right-hand drawers (details & comments), resizable + remembered.
+  const [panelW, setPanelW] = useState(() => clampPanelW(Number((typeof localStorage !== "undefined" && localStorage.getItem("ideanet:panelW")) || 340)));
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState("");
@@ -85,6 +87,9 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
   // Selecting a node/edge reopens the details panel (and closes comments, so
   // the two right-hand panels never overlap).
   useEffect(() => { if (selected) { setShowInspector(true); setShowComments(false); } }, [selected]);
+
+  // Remember the drawer width across sessions.
+  useEffect(() => { try { localStorage.setItem("ideanet:panelW", String(panelW)); } catch { /* private mode */ } }, [panelW]);
 
   // Load the comment thread for this network.
   useEffect(() => { if (net?.id) api.comments(net.id).then(setComments).catch(() => {}); }, [net?.id]);
@@ -188,7 +193,8 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
           )}
         </div>
 
-        <div className="relative flex-1">
+        <div className="flex-1 flex min-h-0">
+        <div className="relative flex-1 min-w-0">
           <Canvas net={net} onChange={setNet} readOnly={ro} selected={selected} setSelected={setSelected}
             centerOnSelect={centerOnSelect} activeTypeId={activeTypeId} onNodeCreate={() => { focusNew.current = true; }} />
 
@@ -267,9 +273,10 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
           {!showComments && !showInspector && (selNode || selEdge || !ro) && (
             <button onClick={() => setShowInspector(true)} className="absolute top-3 right-3 z-20 rounded px-2.5 py-1.5 text-[10px]" style={{ ...panel, color: "#7fd4e2" }}>details ▸</button>
           )}
+        </div>{/* end canvas area */}
+
           {!showComments && showInspector && (selNode || selEdge || !ro) && (
-            <div className="absolute top-3 right-3 w-64 max-w-[78vw] z-20 rounded p-3 pr-6 max-h-[calc(100%-1.5rem)] overflow-y-auto" style={panel}>
-              <button onClick={() => setShowInspector(false)} title="Close" className="absolute top-1 right-1.5 text-base leading-none px-1" style={{ color: "#6f94a1" }}>×</button>
+            <SidePanel title="DETAILS" onClose={() => setShowInspector(false)} width={panelW} setWidth={setPanelW}>
               {selNode ? (
                 <>
                   <div className="text-[10px] mb-2" style={{ color: "#5f8492" }}>NODE</div>
@@ -365,16 +372,23 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
                   </p>
                 </>
               )}
-            </div>
+            </SidePanel>
           )}
 
-          {/* comments thread */}
+          {/* comments thread — a resizable feed on the right */}
           {showComments && (
-            <div className="absolute top-3 right-3 w-80 max-w-[86vw] z-40 rounded flex flex-col max-h-[calc(100%-1.5rem)]" style={panel}>
-              <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: "1px solid rgba(0,240,255,.12)" }}>
-                <span className="text-[10px] tracking-wide" style={{ color: "#9ef0ff" }}>COMMENTS{comments.length ? ` · ${comments.length}` : ""}</span>
-                <button onClick={() => setShowComments(false)} title="Close" className="text-base leading-none px-1" style={{ color: "#6f94a1" }}>×</button>
-              </div>
+            <SidePanel title={`COMMENTS${comments.length ? ` · ${comments.length}` : ""}`} onClose={() => setShowComments(false)} width={panelW} setWidth={setPanelW}
+              scroll={false}
+              footer={user ? (
+                <div className="p-2.5 flex gap-1.5 shrink-0" style={{ borderTop: "1px solid rgba(0,240,255,.12)" }}>
+                  <textarea value={commentText} onChange={(e) => setCommentText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) postComment(); }}
+                    placeholder="Add a comment…" rows={2} className={`${inputCls} resize-none`} style={{ ...inputStyle, flex: 1 }} />
+                  <Btn tone="primary" onClick={postComment}>post</Btn>
+                </div>
+              ) : (
+                <div className="p-3 text-[10px] text-center shrink-0" style={{ borderTop: "1px solid rgba(0,240,255,.12)", color: "#5f8492" }}>Sign in to comment.</div>
+              )}>
               <div className="flex-1 overflow-y-auto px-3 py-2 flex flex-col gap-2.5">
                 {comments.length === 0 ? (
                   <div className="text-[10px] py-6 text-center" style={{ color: "#5f8492" }}>No comments yet.{user ? " Start the thread." : ""}</div>
@@ -391,21 +405,49 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
                   </div>
                 ))}
               </div>
-              {user ? (
-                <div className="p-2.5 flex gap-1.5" style={{ borderTop: "1px solid rgba(0,240,255,.12)" }}>
-                  <textarea value={commentText} onChange={(e) => setCommentText(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) postComment(); }}
-                    placeholder="Add a comment…" rows={2} className={`${inputCls} resize-none`} style={{ ...inputStyle, flex: 1 }} />
-                  <Btn tone="primary" onClick={postComment}>post</Btn>
-                </div>
-              ) : (
-                <div className="p-3 text-[10px] text-center" style={{ borderTop: "1px solid rgba(0,240,255,.12)", color: "#5f8492" }}>Sign in to comment.</div>
-              )}
-            </div>
+            </SidePanel>
           )}
         </div>
       </div>
     </Shell>
+  );
+}
+
+// A right-hand drawer that docks beside the canvas (pushing it, not covering
+// it), with a drag handle on its left edge to resize and a scrollable body.
+const clampPanelW = (w) => {
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
+  return Math.round(Math.max(264, Math.min(w || 340, vw * 0.92, 680)));
+};
+
+function SidePanel({ title, onClose, width, setWidth, footer, scroll = true, children }) {
+  const startResize = (e) => {
+    e.preventDefault();
+    const move = (ev) => setWidth(clampPanelW(window.innerWidth - (ev.touches ? ev.touches[0].clientX : ev.clientX)));
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      document.body.style.userSelect = "";
+    };
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  return (
+    <div className="relative flex shrink-0 z-30" style={{ width }}>
+      <div onPointerDown={startResize} title="Drag to resize" className="w-2 shrink-0 cursor-ew-resize flex items-center justify-center"
+        style={{ background: "rgba(0,240,255,.05)", borderLeft: "1px solid rgba(0,240,255,.14)" }}>
+        <div className="h-8 w-[3px] rounded" style={{ background: "rgba(0,240,255,.4)" }} />
+      </div>
+      <div className="flex-1 flex flex-col min-w-0 min-h-0" style={{ background: "rgba(3,7,10,.96)" }}>
+        <div className="flex items-center justify-between px-3 py-2 shrink-0" style={{ borderBottom: "1px solid rgba(0,240,255,.12)" }}>
+          <span className="text-[10px] tracking-wide" style={{ color: "#9ef0ff" }}>{title}</span>
+          <button onClick={onClose} title="Close" className="text-base leading-none px-1" style={{ color: "#6f94a1" }}>×</button>
+        </div>
+        {scroll ? <div className="flex-1 overflow-y-auto p-3">{children}</div> : children}
+        {footer}
+      </div>
+    </div>
   );
 }
 
