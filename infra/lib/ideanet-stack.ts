@@ -54,19 +54,20 @@ export class IdeaNetStack extends cdk.Stack {
     });
 
     /* ------------------------------------------------------------------ auth
-       Cognito user pool, email + password. A pre-sign-up trigger auto-confirms
-       so the app's signUp() -> immediately-signed-in flow matches local.js
-       (there is no email-verification step wired up yet).
+       Cognito user pool, email + password. New accounts must confirm a code
+       emailed to them before they can sign in, so a bot can't mint accounts on
+       throwaway addresses. Uses Cognito's built-in email sender (no SES setup;
+       ~50 messages/day in the default tier — move to SES for higher volume).
     ------------------------------------------------------------------------ */
-    const preSignUp = new NodejsFunction(this, "PreSignUpFn", {
-      entry: path.join(__dirname, "..", "lambda", "pre-signup.ts"),
-      handler: "handler",
-      runtime: lambda.Runtime.NODEJS_22_X,
-    });
-
     const userPool = new cognito.UserPool(this, "UserPool", {
       selfSignUpEnabled: true,
       signInAliases: { email: true },
+      autoVerify: { email: true }, // Cognito emails a verification code on sign-up
+      userVerification: {
+        emailSubject: "Your IdeaNet verification code",
+        emailBody: "Welcome to IdeaNet. Your verification code is {####}",
+        emailStyle: cognito.VerificationEmailStyle.CODE,
+      },
       standardAttributes: {
         email: { required: true, mutable: true },
         fullname: { required: false, mutable: true },
@@ -78,7 +79,6 @@ export class IdeaNetStack extends cdk.Stack {
         requireUppercase: false,
         requireSymbols: false,
       },
-      lambdaTriggers: { preSignUp },
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
       removalPolicy, // prod: RETAIN so accounts survive a stack teardown
     });
