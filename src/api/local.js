@@ -123,6 +123,10 @@ export const api = {
     await store.set("session", { userId: user.id, email: key });
     return publicUser(user);
   },
+  // No email step in the demo store — signUp already signed you in. These exist
+  // so the UI can call the same surface as the AWS adapter.
+  async confirmSignUp(email, code, password) { return password ? api.signIn(email, password) : true; },
+  async resendCode() { return true; },
   async signIn(email, password) {
     const accounts = (await store.get("accounts")) || {};
     const user = accounts[email.trim().toLowerCase()];

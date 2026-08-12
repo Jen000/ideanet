@@ -81,8 +81,28 @@ export const api = {
     await new Promise((resolve, reject) => {
       pool.signUp(key, password, attrs, null, (err, result) => (err ? reject(asError(err)) : resolve(result)));
     });
-    // The pre-signup trigger auto-confirms, so we can sign in straight away.
-    return api.signIn(key, password);
+    // Account starts UNCONFIRMED — Cognito emails a code that must be entered
+    // before the first sign-in. The UI collects it and calls confirmSignUp.
+    return { needsConfirmation: true, email: key };
+  },
+
+  // Confirm a new account with the emailed code, then sign in.
+  async confirmSignUp(email, code, password) {
+    const key = email.trim().toLowerCase();
+    const user = new CognitoUser({ Username: key, Pool: pool });
+    await new Promise((resolve, reject) => {
+      user.confirmRegistration(String(code).trim(), true, (err, result) => (err ? reject(asError(err)) : resolve(result)));
+    });
+    return password ? api.signIn(key, password) : true;
+  },
+
+  async resendCode(email) {
+    const key = email.trim().toLowerCase();
+    const user = new CognitoUser({ Username: key, Pool: pool });
+    await new Promise((resolve, reject) => {
+      user.resendConfirmationCode((err, result) => (err ? reject(asError(err)) : resolve(result)));
+    });
+    return true;
   },
 
   async signIn(email, password) {
@@ -90,7 +110,15 @@ export const api = {
     const user = new CognitoUser({ Username: key, Pool: pool });
     const details = new AuthenticationDetails({ Username: key, Password: password });
     const session = await new Promise((resolve, reject) => {
-      user.authenticateUser(details, { onSuccess: resolve, onFailure: (err) => reject(asError(err)) });
+      user.authenticateUser(details, {
+        onSuccess: resolve,
+        onFailure: (err) => {
+          const e = asError(err);
+          // Signed up but never confirmed → let the UI jump to the code step.
+          if (err?.code === "UserNotConfirmedException" || /not confirmed/i.test(err?.message || "")) e.needsConfirmation = true;
+          reject(e);
+        },
+      });
     });
     api.syncProfile().catch(() => {}); // register in the directory so others can share by email
     return publicUser(session);
