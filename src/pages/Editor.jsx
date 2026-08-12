@@ -16,6 +16,8 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
   const [activeTypeId, setActiveTypeId] = useState("t_solution");
   const [centerOnSelect, setCenterOnSelect] = useState(true);
   const [showTypes, setShowTypes] = useState(false);
+  // Node-types legend is a big block on a phone; start collapsed on small screens.
+  const [typesOpen, setTypesOpen] = useState(() => typeof window === "undefined" || window.innerWidth >= 640);
   const [showInspector, setShowInspector] = useState(true);
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState([]);
@@ -212,10 +214,13 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
             </div>
 
             <div className="rounded p-2.5" style={panel}>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px]" style={{ color: "#5f8492" }}>NODE TYPES</span>
-                {!ro && <button onClick={() => setShowTypes((v) => !v)} className="text-[10px]" style={{ color: "#00f0ff" }}>{showTypes ? "done" : "edit"}</button>}
+              <div className={`flex items-center justify-between${typesOpen ? " mb-2" : ""}`}>
+                <button onClick={() => setTypesOpen((v) => !v)} className="flex items-center gap-1.5 text-[10px]" style={{ color: "#5f8492" }} title={typesOpen ? "Hide node types" : "Show node types"}>
+                  <span style={{ width: 8, display: "inline-block" }}>{typesOpen ? "▾" : "▸"}</span>NODE TYPES
+                </button>
+                {typesOpen && !ro && <button onClick={() => setShowTypes((v) => !v)} className="text-[10px]" style={{ color: "#00f0ff" }}>{showTypes ? "done" : "edit"}</button>}
               </div>
+              {typesOpen && (<>
               <div className="flex flex-col gap-1">
                 {net.nodeTypes.map((t) => (
                   <div key={t.id}>
@@ -252,6 +257,7 @@ export default function Editor({ netId, user, onExit, readOnly, publicNet, onLik
                 <button onClick={() => { const id = uid("t"); setNet({ ...net, nodeTypes: [...net.nodeTypes, { id, name: "new type", color: SWATCHES[net.nodeTypes.length % SWATCHES.length], size: 22, shape: "circle" }] }); }}
                   className="mt-2 text-[10px]" style={{ color: "#00f0ff" }}>+ add type</button>
               )}
+              </>)}
             </div>
 
             {selected && <Btn onClick={() => setSelected(null)}>clear selection</Btn>}
