@@ -24,8 +24,15 @@ async function gallery() {
   );
   const items = (r.Items ?? []).map((i) => {
     const summary = i.summary as Summary;
-    // Live counts win over whatever was snapshotted into the summary.
-    return { ...summary, likes: i.likes ?? summary.likes, views: i.views ?? summary.views };
+    // Live counts win over whatever was snapshotted into the summary. Visibility
+    // is read off the stored net so it's current even for older snapshots.
+    return {
+      ...summary,
+      likes: i.likes ?? summary.likes,
+      views: i.views ?? summary.views,
+      comments: Math.max(0, (i.comments as number) ?? 0),
+      visibility: i.net?.visibility ?? summary.visibility,
+    };
   });
   return json(200, items);
 }

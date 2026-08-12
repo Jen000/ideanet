@@ -156,12 +156,19 @@ export default function Landing({ user, onSignIn, onDashboard, onOpen }) {
                   <MiniPreview preview={g.preview} />
                 </div>
                 <div className="p-4">
-                  <div className="text-xs mb-1.5" style={{ color: "#dff6fb" }}>{g.title}</div>
+                  <div className="flex items-start gap-2 mb-1.5">
+                    <div className="text-xs flex-1 min-w-0" style={{ color: "#dff6fb" }}>{g.title}</div>
+                    {g.visibility === "open" ? (
+                      <span className="text-[8px] px-1.5 py-0.5 rounded shrink-0 whitespace-nowrap" style={{ color: "#39ff88", border: "1px solid rgba(57,255,136,.4)", background: "rgba(57,255,136,.08)" }} title="Anyone signed in can edit this network">OPEN · EDITABLE</span>
+                    ) : (
+                      <span className="text-[8px] px-1.5 py-0.5 rounded shrink-0 whitespace-nowrap" style={{ color: "#7fd4e2", border: "1px solid rgba(0,240,255,.25)" }} title="Anyone can read this network">PUBLIC</span>
+                    )}
+                  </div>
                   <div className="text-[10px] leading-relaxed mb-3" style={{ color: "#6f94a1", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{g.description}</div>
                   <div className="flex flex-wrap gap-1 mb-3">{(g.tags || []).slice(0, 3).map((t) => <Tag key={t}>{t}</Tag>)}</div>
                   <div className="flex items-center justify-between text-[10px]" style={{ color: "#4f7280" }}>
                     <span>{g.author}</span>
-                    <span>♥ {g.likes} · ◉ {g.views} · {g.nodeCount} nodes</span>
+                    <span>♥ {g.likes} · ◉ {g.views} · 💬 {g.comments || 0} · {g.nodeCount} nodes</span>
                   </div>
                 </div>
               </button>

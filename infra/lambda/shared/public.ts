@@ -14,6 +14,7 @@ export interface PublicItem {
   summary: ReturnType<typeof summarize>;
   likes: number;
   views: number;
+  comments: number;
   score: number;
 }
 
@@ -22,9 +23,9 @@ export async function getPublic(netId: string): Promise<PublicItem | null> {
   return (r.Item as PublicItem) ?? null;
 }
 
-// Publish or re-publish. Likes/views are preserved across edits by the caller
-// passing the existing counts in.
-export async function putPublicCopy(net: Network, likes: number, views: number): Promise<void> {
+// Publish or re-publish. Likes/views/comments are preserved across edits by the
+// caller passing the existing counts in.
+export async function putPublicCopy(net: Network, likes: number, views: number, comments = 0): Promise<void> {
   const counts = { likes, views, updatedAt: net.updatedAt };
   const item: PublicItem = {
     PK: publicPk(net.id),
@@ -36,9 +37,30 @@ export async function putPublicCopy(net: Network, likes: number, views: number):
     summary: summarize({ ...net, likes, views }),
     likes,
     views,
+    comments,
     score: score(counts),
   };
   await ddb.send(new PutCommand({ TableName: TABLE, Item: item }));
+}
+
+// Keep the denormalised comment count on the public copy in step with the
+// thread, so the gallery can show it without querying every network's comments.
+// A no-op when the network has no public copy (private/shared-only).
+export async function bumpPublicComments(netId: string, delta: number): Promise<void> {
+  try {
+    await ddb.send(
+      new UpdateCommand({
+        TableName: TABLE,
+        Key: { PK: publicPk(netId), SK: PUBLIC_SK },
+        UpdateExpression: "ADD #c :d",
+        ConditionExpression: "attribute_exists(PK)",
+        ExpressionAttributeNames: { "#c": "comments" },
+        ExpressionAttributeValues: { ":d": delta },
+      })
+    );
+  } catch (e: any) {
+    if (e?.name !== "ConditionalCheckFailedException") throw e; // no public copy: nothing to count
+  }
 }
 
 export async function deletePublicCopy(netId: string): Promise<void> {
