@@ -157,6 +157,8 @@ export const api = {
     const mine = shares.find((c) => c.userId === me);
     const mirror = await store.get(`mirror:${id}`, true);
     if (mine && mirror) return { net: mirror, role: mine.role };
+    // Open tier: any signed-in user may edit a network marked "open".
+    if (me && mirror && mirror.visibility === "open") return { net: mirror, role: "editor" };
     if (all[id]) return { net: all[id], role: "owner" };
     return null;
   },
@@ -171,7 +173,7 @@ export const api = {
       await store.set("mynets", all);
     }
     await store.set(`mirror:${net.id}`, stamped, true); // cross-account canonical
-    if (stamped.visibility === "public") {
+    if (stamped.visibility === "public" || stamped.visibility === "open") {
       await store.set(`pub:${net.id}`, stamped, true);
       const idx = (await store.get("pubindex", true)) || {};
       idx[net.id] = { ...summarize(stamped), likes: idx[net.id]?.likes ?? 0, views: idx[net.id]?.views ?? 0 };
@@ -327,7 +329,7 @@ export const api = {
 const publicUser = (u) => ({ id: u.id, name: u.name, email: u.email });
 export const summarize = (n) => ({
   id: n.id, title: n.title, description: n.description, tags: n.tags,
-  author: n.ownerName, likes: n.likes || 0, views: n.views || 0,
+  author: n.ownerName, likes: n.likes || 0, views: n.views || 0, visibility: n.visibility,
   nodeCount: n.nodes.length, updatedAt: n.updatedAt,
   preview: { nodes: n.nodes.map((x) => ({ x: x.x, y: x.y, t: x.typeId })), edges: n.edges.map((e) => [e.source, e.target]), ids: n.nodes.map((x) => x.id), types: n.nodeTypes },
 });

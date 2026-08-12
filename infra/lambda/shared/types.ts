@@ -17,7 +17,8 @@ export interface Network {
   tags: string[];
   ownerId: string;
   ownerName: string;
-  visibility: "public" | "private";
+  // "open" is a public network anyone signed in may also edit (not just view).
+  visibility: "public" | "private" | "open";
   nodeTypes: NodeType[];
   nodes: GraphNode[];
   edges: Edge[];
@@ -36,6 +37,7 @@ export interface Summary {
   author: string;
   likes: number;
   views: number;
+  visibility?: "public" | "private" | "open";
   nodeCount: number;
   updatedAt: number;
   preview: {

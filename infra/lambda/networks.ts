@@ -55,7 +55,7 @@ async function save(event: APIGatewayProxyEventV2WithJWTAuthorizer) {
     ownerId,
     ownerName: access ? access.net.ownerName : me.name,
     collaborators: access ? access.net.collaborators || [] : [],
-    visibility: iAmOwner ? (incoming.visibility === "public" ? "public" : "private") : access!.net.visibility,
+    visibility: iAmOwner ? normalizeVisibility(incoming.visibility) : access!.net.visibility,
     createdAt: access ? access.net.createdAt : incoming.createdAt || now(),
     updatedAt: now(),
     likes: access ? access.net.likes || 0 : 0,
@@ -83,7 +83,9 @@ async function save(event: APIGatewayProxyEventV2WithJWTAuthorizer) {
     throw err;
   }
 
-  if (net.visibility === "public") {
+  // Both "public" and "open" networks are listed and readable in the gallery;
+  // "open" additionally lets anyone signed in edit (enforced in resolveAccess).
+  if (net.visibility === "public" || net.visibility === "open") {
     const existing = await getPublic(id);
     await putPublicCopy(net, existing?.likes ?? 0, existing?.views ?? 0);
   } else {
@@ -91,6 +93,9 @@ async function save(event: APIGatewayProxyEventV2WithJWTAuthorizer) {
   }
   return json(200, net);
 }
+
+const normalizeVisibility = (v: unknown): Network["visibility"] =>
+  v === "public" || v === "open" ? v : "private";
 
 // DELETE /networks/{id} — owner only. Removes the network, its public copy, and
 // every collaborator's share row.
