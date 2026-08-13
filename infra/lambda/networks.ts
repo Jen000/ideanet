@@ -1,13 +1,13 @@
 import type { APIGatewayProxyEventV2WithJWTAuthorizer } from "aws-lambda";
 import { GetCommand, PutCommand, DeleteCommand, UpdateCommand, QueryCommand, BatchGetCommand } from "@aws-sdk/lib-dynamodb";
 import { ddb, TABLE } from "./shared/dynamo.js";
-import { userPk, netSk, shareSk } from "./shared/keys.js";
+import { userPk, netSk, shareSk, emailPk, DIRECTORY_SK } from "./shared/keys.js";
 import { caller, body, json, handle, HttpError } from "./shared/http.js";
 import { getPublic, putPublicCopy, deletePublicCopy } from "./shared/public.js";
 import { resolveAccess, canWrite } from "./shared/access.js";
 import { validateNetwork, LIMITS } from "./shared/validate.js";
 import { snapshotNet, listHistory, getSnapshot, deleteHistory } from "./shared/history.js";
-import { lookupByEmail, upsertDirectory } from "./shared/directory.js";
+import { lookupByEmail, upsertDirectory, isUsernameTaken, reserveUsername, releaseUsername } from "./shared/directory.js";
 import { summarize } from "./shared/summary.js";
 import type { Network, Collaborator } from "./shared/types.js";
 
@@ -311,7 +311,85 @@ async function sharedWithMe(event: APIGatewayProxyEventV2WithJWTAuthorizer) {
 async function syncMe(event: APIGatewayProxyEventV2WithJWTAuthorizer) {
   const me = caller(event);
   if (me.email) await upsertDirectory({ userId: me.id, email: me.email, name: me.name });
+  // Best-effort: claim the username on the way in so existing users get a
+  // reservation over time. Never blocks sign-in if it's already taken.
+  if (me.name) await reserveUsername(me.name, me.id).catch(() => {});
   return json(200, { id: me.id, name: me.name, email: me.email });
+}
+
+// POST /me/username { name } — change the caller's display name (username),
+// enforcing uniqueness and propagating it to their own networks.
+async function changeUsername(event: APIGatewayProxyEventV2WithJWTAuthorizer) {
+  const me = caller(event);
+  const clean = (body<{ name: string }>(event).name || "").trim();
+  if (!clean) throw new HttpError(400, "Enter a username.");
+  if (clean.length > 60) throw new HttpError(400, "Username is too long (max 60).");
+
+  if (await isUsernameTaken(clean, me.id)) throw new HttpError(409, "That username is taken.");
+  try { await reserveUsername(clean, me.id); }
+  catch (e: any) { if (e?.taken) throw new HttpError(409, "That username is taken."); throw e; }
+
+  // Release the old reservation and refresh the email-directory entry.
+  const prev = await lookupByEmail(me.email);
+  if (prev?.name && prev.name.toLowerCase() !== clean.toLowerCase()) await releaseUsername(prev.name, me.id);
+  if (me.email) await upsertDirectory({ userId: me.id, email: me.email, name: clean });
+
+  // Propagate the name onto the caller's own networks (and their public copies)
+  // so cards and the editor don't show a stale author.
+  const owned = await ddb.send(
+    new QueryCommand({
+      TableName: TABLE,
+      KeyConditionExpression: "PK = :pk AND begins_with(SK, :sk)",
+      ExpressionAttributeValues: { ":pk": userPk(me.id), ":sk": "NET#" },
+    })
+  );
+  for (const item of owned.Items ?? []) {
+    const net = item.net as Network;
+    if (net.ownerName === clean) continue;
+    net.ownerName = clean;
+    await ddb.send(
+      new UpdateCommand({
+        TableName: TABLE,
+        Key: { PK: userPk(me.id), SK: netSk(net.id) },
+        UpdateExpression: "SET #n.#o = :o",
+        ExpressionAttributeNames: { "#n": "net", "#o": "ownerName" },
+        ExpressionAttributeValues: { ":o": clean },
+      })
+    );
+    if (net.visibility === "public" || net.visibility === "open") {
+      const existing = await getPublic(net.id);
+      await putPublicCopy(net, existing?.likes ?? 0, existing?.views ?? 0, existing?.comments ?? 0);
+    }
+  }
+  return json(200, { name: clean });
+}
+
+// DELETE /me — erase the caller's account data. The client deletes the Cognito
+// user afterwards; this clears everything they own or hold in the table.
+async function deleteAccount(event: APIGatewayProxyEventV2WithJWTAuthorizer) {
+  const me = caller(event);
+  const mine = await ddb.send(
+    new QueryCommand({
+      TableName: TABLE,
+      KeyConditionExpression: "PK = :pk",
+      ExpressionAttributeValues: { ":pk": userPk(me.id) },
+    })
+  );
+  for (const item of mine.Items ?? []) {
+    const sk = item.SK as string;
+    if (sk.startsWith("NET#") && item.net) {
+      const net = item.net as Network;
+      await deletePublicCopy(net.id);
+      await deleteHistory(net.id);
+      for (const c of net.collaborators ?? []) {
+        await ddb.send(new DeleteCommand({ TableName: TABLE, Key: { PK: userPk(c.userId), SK: shareSk(net.id) } }));
+      }
+    }
+    await ddb.send(new DeleteCommand({ TableName: TABLE, Key: { PK: item.PK as string, SK: sk } }));
+  }
+  if (me.email) await ddb.send(new DeleteCommand({ TableName: TABLE, Key: { PK: emailPk(me.email), SK: DIRECTORY_SK } }));
+  if (me.name) await releaseUsername(me.name, me.id);
+  return json(200, {});
 }
 
 function pathId(event: APIGatewayProxyEventV2WithJWTAuthorizer): string {
@@ -334,6 +412,8 @@ export const handler = handle<APIGatewayProxyEventV2WithJWTAuthorizer>(async (ev
     case "DELETE /networks/{id}/collaborators/{userId}": return removeCollaborator(event);
     case "GET /shared": return sharedWithMe(event);
     case "POST /me": return syncMe(event);
+    case "POST /me/username": return changeUsername(event);
+    case "DELETE /me": return deleteAccount(event);
     default: throw new HttpError(404, `No route for ${event.routeKey}`);
   }
 });

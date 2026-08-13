@@ -5,7 +5,7 @@ import { Shell, Btn, Tag, panel, Spinner } from "../ui";
 import MiniPreview from "../MiniPreview";
 
 /* =============================================================== DASHBOARD */
-export default function Dashboard({ user, onOpen, onOpenPublic, onHome, onSignOut }) {
+export default function Dashboard({ user, onOpen, onOpenPublic, onHome, onSignOut, onSettings }) {
   const [tab, setTab] = useState("created");
   const [nets, setNets] = useState([]);
   const [stars, setStars] = useState([]);
@@ -51,6 +51,7 @@ export default function Dashboard({ user, onOpen, onOpenPublic, onHome, onSignOu
         <button onClick={onHome} className="text-sm tracking-[0.3em]" style={{ color: "#00f0ff", textShadow: "0 0 12px rgba(0,240,255,.45)" }}>◇ IDEANET</button>
         <div className="flex items-center gap-2">
           <span className="text-[10px] hidden sm:inline" style={{ color: "#5c7f8c" }}>{user.name}</span>
+          <Btn onClick={onSettings}>settings</Btn>
           <Btn onClick={onSignOut}>sign out</Btn>
         </div>
       </header>

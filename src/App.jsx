@@ -6,6 +6,7 @@ import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Editor from "./pages/Editor";
+import Settings from "./pages/Settings";
 
 const Loading = () => (
   <Shell><div className="min-h-screen flex items-center justify-center text-xs" style={{ color: "#5f8492" }}>Loading…</div></Shell>
@@ -45,7 +46,7 @@ export default function App() {
 
   // Signed-out users can't reach protected routes.
   useEffect(() => {
-    if (userLoaded && !user && (route.name === "dashboard" || route.name === "editor")) {
+    if (userLoaded && !user && (route.name === "dashboard" || route.name === "editor" || route.name === "settings")) {
       navigate("/signin", { replace: true });
     }
   }, [userLoaded, user, route.name, navigate]);
@@ -68,7 +69,14 @@ export default function App() {
     return <Dashboard user={user} onHome={() => navigate("/")}
       onOpen={(id) => navigate(`/net/${id}`)}
       onOpenPublic={(id) => navigate(`/view/${id}`)}
+      onSettings={() => navigate("/settings")}
       onSignOut={async () => { await api.signOut(); setUser(null); navigate("/"); }} />;
+  }
+
+  if (route.name === "settings") {
+    if (!userLoaded || !user) return <Loading />;
+    return <Settings user={user} onUser={setUser} onBack={() => navigate("/dashboard")}
+      onSignedOut={() => { setUser(null); navigate("/"); }} />;
   }
 
   if (route.name === "editor") {
