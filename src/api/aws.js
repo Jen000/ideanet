@@ -86,22 +86,34 @@ export const api = {
     return { needsConfirmation: true, email: key };
   },
 
-  // Confirm a new account with the emailed code, then sign in.
+  // Confirm a new account with the emailed code, then sign in. If the account
+  // is already confirmed (e.g. legacy auto-confirmed accounts, or the pool
+  // hasn't switched to verification yet), there's nothing to confirm — just
+  // sign in, so a stale window never dead-ends the user.
   async confirmSignUp(email, code, password) {
     const key = email.trim().toLowerCase();
     const user = new CognitoUser({ Username: key, Pool: pool });
-    await new Promise((resolve, reject) => {
-      user.confirmRegistration(String(code).trim(), true, (err, result) => (err ? reject(asError(err)) : resolve(result)));
-    });
+    try {
+      await new Promise((resolve, reject) => {
+        user.confirmRegistration(String(code).trim(), true, (err, result) => (err ? reject(err) : resolve(result)));
+      });
+    } catch (err) {
+      if (!isAlreadyConfirmed(err)) throw asError(err);
+    }
     return password ? api.signIn(key, password) : true;
   },
 
   async resendCode(email) {
     const key = email.trim().toLowerCase();
     const user = new CognitoUser({ Username: key, Pool: pool });
-    await new Promise((resolve, reject) => {
-      user.resendConfirmationCode((err, result) => (err ? reject(asError(err)) : resolve(result)));
-    });
+    try {
+      await new Promise((resolve, reject) => {
+        user.resendConfirmationCode((err, result) => (err ? reject(err) : resolve(result)));
+      });
+    } catch (err) {
+      // Already confirmed → no code to resend; not an error worth surfacing.
+      if (!isAlreadyConfirmed(err)) throw asError(err);
+    }
     return true;
   },
 
@@ -269,6 +281,13 @@ export const api = {
 // Cognito errors carry a readable .message; normalize anything odd to an Error.
 function asError(err) {
   return err instanceof Error ? err : new Error(err?.message || "Authentication failed.");
+}
+
+// Cognito reports an already-confirmed account a couple of ways depending on the
+// call; treat them all as "nothing to do".
+function isAlreadyConfirmed(err) {
+  const msg = err?.message || "";
+  return err?.code === "NotAuthorizedException" && /already been confirmed|already confirmed|status is confirmed/i.test(msg);
 }
 
 export { summarize, score } from "./local";
