@@ -195,7 +195,8 @@ export class IdeaNetStack extends cdk.Stack {
     api.addRoutes({ path: "/networks/{id}/collaborators", methods: [apigw.HttpMethod.GET, apigw.HttpMethod.POST], integration: networksInt, authorizer });
     api.addRoutes({ path: "/networks/{id}/collaborators/{userId}", methods: [apigw.HttpMethod.DELETE], integration: networksInt, authorizer });
     api.addRoutes({ path: "/shared", methods: [apigw.HttpMethod.GET], integration: networksInt, authorizer });
-    api.addRoutes({ path: "/me", methods: [apigw.HttpMethod.POST], integration: networksInt, authorizer });
+    api.addRoutes({ path: "/me", methods: [apigw.HttpMethod.POST, apigw.HttpMethod.DELETE], integration: networksInt, authorizer });
+    api.addRoutes({ path: "/me/username", methods: [apigw.HttpMethod.POST], integration: networksInt, authorizer });
     api.addRoutes({ path: "/networks/{id}/comments", methods: [apigw.HttpMethod.GET, apigw.HttpMethod.POST], integration: commentsInt, authorizer });
     api.addRoutes({ path: "/networks/{id}/comments/{commentId}", methods: [apigw.HttpMethod.DELETE], integration: commentsInt, authorizer });
     api.addRoutes({ path: "/networks/{id}/like", methods: [apigw.HttpMethod.POST], integration: likesInt, authorizer });

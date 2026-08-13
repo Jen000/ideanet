@@ -146,6 +146,57 @@ export const api = {
   },
   // Directory is the accounts map here, so nothing to sync.
   async syncProfile() { return null; },
+
+  /* --------------------------------------------------------- account settings */
+  async changeUsername(name) {
+    const clean = (name || "").trim();
+    if (!clean) throw new Error("Enter a username.");
+    if (clean.length > 60) throw new Error("Username is too long (max 60).");
+    const s = await store.get("session");
+    const accounts = (await store.get("accounts")) || {};
+    const taken = Object.values(accounts).some((u) => u.email !== s?.email && (u.name || "").toLowerCase() === clean.toLowerCase());
+    if (taken) throw new Error("That username is taken.");
+    if (accounts[s?.email]) { accounts[s.email].name = clean; await store.set("accounts", accounts); }
+    // propagate onto the user's own networks + public copies
+    const all = (await store.get("mynets")) || {};
+    for (const id in all) {
+      if (all[id].ownerId !== s?.userId) continue;
+      all[id] = { ...all[id], ownerName: clean };
+      await store.set(`mirror:${id}`, all[id], true);
+      const pub = await store.get(`pub:${id}`, true);
+      if (pub) { await store.set(`pub:${id}`, { ...pub, ownerName: clean }, true); const idx = (await store.get("pubindex", true)) || {}; if (idx[id]) { idx[id] = { ...summarize(all[id]), likes: idx[id].likes, views: idx[id].views }; await store.set("pubindex", idx, true); } }
+    }
+    await store.set("mynets", all);
+    return { name: clean };
+  },
+  async changeEmail(newEmail) {
+    const key = (newEmail || "").trim().toLowerCase();
+    if (!key) throw new Error("Enter an email.");
+    const s = await store.get("session");
+    const accounts = (await store.get("accounts")) || {};
+    if (accounts[key] && key !== s?.email) throw new Error("That email is already in use.");
+    const me = accounts[s?.email];
+    if (me) { delete accounts[s.email]; me.email = key; accounts[key] = me; await store.set("accounts", accounts); await store.set("session", { userId: me.id, email: key }); }
+    return { needsVerification: false, email: key }; // demo store skips the email step
+  },
+  async verifyEmail() { return true; },
+  async deleteAccount() {
+    const s = await store.get("session");
+    const me = s?.userId;
+    const all = (await store.get("mynets")) || {};
+    for (const id in all) {
+      if (all[id].ownerId !== me) continue;
+      await api.unpublish(id);
+      await store.set(`mirror:${id}`, null, true);
+      await store.set(`hist:${id}`, [], true);
+    }
+    await store.set("mynets", {});
+    const accounts = (await store.get("accounts")) || {};
+    if (s?.email) delete accounts[s.email];
+    await store.set("accounts", accounts);
+    await store.set("session", null);
+    return true;
+  },
   async myNetworks() {
     const s = await store.get("session");
     const me = s?.userId;

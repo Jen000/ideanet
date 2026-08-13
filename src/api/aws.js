@@ -51,6 +51,20 @@ const idToken = () =>
     });
   });
 
+// Run fn with the signed-in CognitoUser once its session is loaded (required
+// before updateAttributes/verifyAttribute/deleteUser will work).
+const withSession = (fn) =>
+  new Promise((resolve, reject) => {
+    const u = pool.getCurrentUser();
+    if (!u) return reject(new Error("Please sign in."));
+    u.getSession((err) => (err ? reject(asError(err)) : Promise.resolve(fn(u)).then(resolve, reject)));
+  });
+
+const updateCognitoAttrs = (attrs) =>
+  withSession((u) => new Promise((resolve, reject) => {
+    u.updateAttributes(attrs.map((a) => new CognitoUserAttribute(a)), (e) => (e ? reject(asError(e)) : resolve()));
+  }));
+
 /* ---------------------------------------------------------------- http calls */
 async function call(path, { method = "GET", body, auth = true } = {}) {
   const headers = { "content-type": "application/json" };
@@ -157,6 +171,42 @@ export const api = {
     const jwt = await idToken();
     if (!jwt) return null;
     return call("/me", { method: "POST" });
+  },
+
+  /* ------------------------------------------------------------ account settings */
+  // Change the display name (username). The server reserves it (409 if taken)
+  // and propagates it to the caller's networks; then we update the Cognito
+  // attribute so the token reflects it after its next refresh.
+  async changeUsername(name) {
+    const clean = (name || "").trim();
+    await call("/me/username", { method: "POST", body: { name: clean } });
+    await updateCognitoAttrs([{ Name: "name", Value: clean }]);
+    return { name: clean };
+  },
+
+  // Change the sign-in email. Cognito emails a code to the new address; the UI
+  // then calls verifyEmail. Fails if another account already uses that email.
+  async changeEmail(newEmail) {
+    const key = (newEmail || "").trim().toLowerCase();
+    if (!key) throw new Error("Enter an email.");
+    await updateCognitoAttrs([{ Name: "email", Value: key }]);
+    return { needsVerification: true, email: key };
+  },
+  async verifyEmail(code) {
+    await withSession((u) => new Promise((resolve, reject) => {
+      u.verifyAttribute("email", String(code).trim(), { onSuccess: () => resolve(), onFailure: (e) => reject(asError(e)) });
+    }));
+    api.syncProfile().catch(() => {});
+    return true;
+  },
+
+  // Erase all the caller's data (server), then delete the Cognito account.
+  async deleteAccount() {
+    await call("/me", { method: "DELETE" });
+    await withSession((u) => new Promise((resolve, reject) => {
+      u.deleteUser((e) => (e ? reject(asError(e)) : resolve()));
+    })).catch(() => {}); // data is already gone; ignore a stale-session failure
+    return true;
   },
 
   /* --------------------------------------------- the signed-in user's networks */

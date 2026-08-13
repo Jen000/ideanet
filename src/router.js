@@ -34,6 +34,7 @@ export function parseRoute(path) {
   if (path === "/") return { name: "landing" };
   if (path === "/signin") return { name: "auth" };
   if (path === "/dashboard") return { name: "dashboard" };
+  if (path === "/settings") return { name: "settings" };
   const net = path.match(/^\/net\/([^/]+)$/);
   if (net) return { name: "editor", id: decodeURIComponent(net[1]) };
   const view = path.match(/^\/view\/([^/]+)$/);
